@@ -1,32 +1,15 @@
 import hashlib
+from fastecdsa import keys, curve
+from base58 import b58encode, b58decode
 from datetime import datetime
 #from app import db
 #from models import *
 
-# class Wallet(object):
-#     def __init__(self, privateKey, publicKey):
-#         self.privateKey = privateKey
-#         self.publicKey = publicKey
-#
-# class Wallets(object):
-#     def __init__(self):
-#         self.wallets = []
-#
-#     def newWallet(self):
-#         # prKey, pubKey = newKeyPair()
-#         pass
-#
-#     def newKeyPair(self):
-#         pass
-
-# Single block itself
-class Block(object):
-    def __init__(self, timeStamp, transactions, prevHash, hash, nonce):
-        self.timeStamp = timeStamp
-        self.transactions = transactions
-        self.prevHash = prevHash
-        self.hash = hash
-        self.nonce = nonce
+class Wallet(object):
+    def __init__(self, privateKey, publicKey, publicKeyBytes):
+        self.privateKey = privateKey
+        self.publicKey = publicKey
+        self.publicKeyBytes = publicKeyBytes
 
 class Transaction(object):
     def __init__(self, id, vIn, vOut):
@@ -35,30 +18,84 @@ class Transaction(object):
         self.vOut = vOut
 
 class TransactionOutput(object):
-    def __init__(self, val, pubKey):
+    def __init__(self, val, to, version, addrCheckSumLen):
         self.val = val
-        self.pubKey = pubKey
+        self.pubKeyHash = self.lock(to, version, addrCheckSumLen)
 
-    def canBeUnlockedWith(self, unlockingData):
-        return self.pubKey == unlockingData
+    def lock(self, address, version, addrCheckSumLen):
+        pubKeyHash = b58decode(address)
+        pubKeyHash = pubKeyHash[len(version) : len(pubKeyHash) - addrCheckSumLen]
+        return pubKeyHash
+
+    def isLockedWithKey(self, pubKeyHash):
+        return pubKeyHash == self.pubKeyHash
 
 class TransactionInput(object):
-    def __init__(self, id, vOut, sig):
+    def __init__(self, id, vOut, sig, pubKey):
         self.id = id
         self.vOut = vOut
         self.sig = sig
+        self.pubKey = pubKey
 
-    def canUnlockOutputWith(self, unlockingData):
-        return self.sig == unlockingData
+    def usesKey(self, pubKey, pubKeyHash):
+        return pubKey == pubKeyHash
 
-# Instance that consists of blocks
+class Block(object):
+    def __init__(self, timeStamp, transactions, prevHash, hash, nonce):
+        self.timeStamp = timeStamp
+        self.transactions = transactions
+        self.prevHash = prevHash
+        self.hash = hash
+        self.nonce = nonce
+
 class Chain(object):
     def __init__(self):
         self.blocks = []
+        self.wallets = {}
         # We can change target bits due to control complexity of making new blocks
         #self.targetBits = int(24)
         self.targetBits = int(12)
+        # Value to get for mining
         self.signUnit = 10
+        self.addrCheckSumLen = 4
+        self.version = bytes(0x00)
+
+    def newWallet(self):
+        prKey, pubKey, pubKeyBytes = self.newKeyPair()
+        wallet = Wallet(prKey, pubKey, pubKeyBytes)
+        address = str(self.getAddress(wallet), 'utf-8')
+        self.wallets[address] = wallet
+        print('Your new address: ' + address)
+        return address
+
+    def newKeyPair(self):
+        # generate a private key for curve P256
+        prKey = keys.gen_private_key(curve.P256)
+        # get the public key corresponding to the private key we just generated
+        pubKey = keys.get_public_key(prKey, curve.P256)
+        # public key to bytes
+        pubKeyBytes = pubKey.x.to_bytes(32, "big") + pubKey.y.to_bytes(32, "big")
+        return prKey, pubKey, pubKeyBytes
+
+    def pubKeyHash(self, pubKeyBytes):
+        ripemd160 = hashlib.new('ripemd160')
+        ripemd160.update(hashlib.sha256(pubKeyBytes).digest())
+        return ripemd160.digest()
+
+    def getAddress(self, wallet):
+        pubKeyHash = self.pubKeyHash(self.version + wallet.publicKeyBytes)
+        # first 4 bytes - checksum
+        checksum = hashlib.sha256(hashlib.sha256(pubKeyHash).digest()).digest()[:self.addrCheckSumLen]
+        address = b58encode(pubKeyHash + checksum)
+        return address
+
+    # def isAddressValid(self, address):
+    #     pubKeyHash = b58decode(address)
+    #     # pub key
+    #     pubKey = pubKeyHash[: len(pubKeyHash) - self.addrCheckSumLen]
+    #     # check sum
+    #     checkSum = pubKeyHash[len(pubKeyHash) - self.addrCheckSumLen:]
+    #     pass
 
     # hash - 256 bits
     # target bits - 25 bits -> target instance that is smaller than the hash (not valid proof of work)
@@ -74,12 +111,11 @@ class Chain(object):
         while nonce < maxInt64:
             allInOne = str(block.timeStamp) + str(txHash) + str(block.prevHash) + '{:x}'.format(int(nonce))
             dataHash = hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
-            if ((int(dataHash, 16) > target) - (int(dataHash, 16) < target)) == -1: # cmp
+            # cmp
+            if ((int(dataHash, 16) > target) - (int(dataHash, 16) < target)) == -1:
                 break
             else:
-                #print('{:x}'.format(int(nonce)))
                 nonce += 1
-
         return dataHash, nonce
 
     # check if proof of work is valid for a single block
@@ -87,15 +123,9 @@ class Chain(object):
         target = int(str(int(10**round((256 - self.targetBits)/4))), 16)
         allInOne = str(block.timeStamp) + str(block.data) + str(block.prevHash) + '{:x}'.format(int(block.nonce))
         dataHash = hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
-
         return ((int(dataHash, 16) > target) - (int(dataHash, 16) < target)) == -1
 
     def proofCheck(self):
-        # print('Proof of work verification:', sep='\n')
-        # print('', sep='\n')
-
-        #blocks = Blocks.query.all()
-        #for block in blocks:
         for block in self.blocks:
             print('Data: ' + block.data)
             print('Hash: ' + block.hash)
@@ -109,36 +139,30 @@ class Chain(object):
             allIdsTxsInOne += tx.id
         txHash = hashlib.sha256(allIdsTxsInOne.encode('utf-8')).hexdigest()
         allInOne = str(block.timeStamp) + str(txHash) + str(block.prevHash) + '{:x}'.format(int(block.nonce))
-
         return hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
 
     def newBlock(self, transactions, prevHash):
         block = Block(datetime.now(), transactions, prevHash, '', '')
         block.hash, block.nonce = self.proofOfWork(block)
-
         return block
 
     def transactionHash(self, transaction):
         allInOne = ''
         for txIn in transaction.vIn:
-            allInOne += str(txIn.id) + str(txIn.vOut) + str(txIn.sig)
+            allInOne += str(txIn.id) + str(txIn.vOut) + str(txIn.sig) + str(txIn.pubKey)
         for txOut in transaction.vOut:
-            allInOne += str(txOut.val) + str(txOut.pubKey)
+            allInOne += str(txOut.val) + str(txOut.pubKeyHash)
         txHash = hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
-
         return txHash
 
     def coinBaseTx(self, to, data):
-        if str(data) == '':
-            data = 'Rewards to ' + str(to) + '\'s for mining Genesis Block'
-        tIn = TransactionInput(None, -1, data)
-        tOut = TransactionOutput(self.signUnit, to)
+        tIn = TransactionInput(None, -1, None, data)
+        tOut = TransactionOutput(self.signUnit, to, self.version, self.addrCheckSumLen)
         tr = Transaction(0, [tIn], [tOut])
         tr.id = self.transactionHash(tr)
-
         return tr
 
-    def unspentTxs(self, address):
+    def unspentTxs(self, pubKeyHash):
         unspentTxs = []
         unlockingInputs = []
         unspentValidTxs = []
@@ -152,30 +176,14 @@ class Chain(object):
                             move = False
                             break
                     if move == False: continue
-                    if vOut.canBeUnlockedWith(address):
+                    # check if provided public key hash was used to lock the output
+                    if vOut.isLockedWithKey(pubKeyHash):
                         # set tx itself, index of the vOut and vOut itself
                         unspentTxs.append([tx, index, vOut])
-                # print('Len vIn:' + str(len(tx.vIn)))
                 for vIn in tx.vIn:
                     if vIn.vOut == -1: break # first transaction
-                    if vIn.canUnlockOutputWith(address):
+                    if vIn.usesKey(self.pubKeyHash(vIn.pubKey), pubKeyHash):
                         unlockingInputs.append(vIn)
-
-        # print('Outputs', sep='\n')
-        # for tx in unspentTxs:
-        #     print('Tx id:' + tx[0].id, sep='\n')
-        #     print('Output id:' + str(tx[1]), sep='\n')
-        #     print('Output val:' + str(tx[2].val), sep='\n')
-        #     print('Output key:' + tx[2].pubKey, sep='\n')
-        #     print('', sep='\n')
-        # print('', sep='\n')
-        # print('Inputs', sep='\n')
-        # for tx in unlockingInputs:
-        #     print('Tx id:' + str(tx.id), sep='\n')
-        #     print('Input output id:' + str(tx.vOut), sep='\n')
-        #     print('Input user:' + tx.sig, sep='\n')
-        #     print('', sep='\n')
-
         # we have unlocking inputs and unspent transactions -> get valid unspent transactions
         if len(unlockingInputs) == 0:
             unspentValidTxs = unspentTxs
@@ -190,79 +198,54 @@ class Chain(object):
                     if equals == False:
                         unspentValidTxs.append(vOutput)
                         break
-
         return unspentValidTxs
 
-    def getBalance(self, address):
-        balance = 0
-        for tx in self.unspentTxs(address):
-            #print(tx[2].val)
-            balance += int(tx[2].val)
-        print('Balance of ' + address + ': ' + str(balance))
-
-    def accVer(self, address, amount):
-        unspentTxs = self.unspentTxs(address)
+    def accVer(self, pubKeyHash, amount):
+        unspentTxs = self.unspentTxs(pubKeyHash)
         unspentAddressTxs = []
         acc = 0
         for tx in unspentTxs:
-            if tx[0].vOut[tx[1]].canBeUnlockedWith(address) and (acc < amount):
+            if tx[0].vOut[tx[1]].isLockedWithKey(pubKeyHash) and (acc < amount):
                 acc += tx[2].val
                 unspentAddressTxs.append(tx)
                 if (acc >= amount): break
-
         return acc, unspentAddressTxs
 
     def newTransaction(self, fr, to, amount):
         inputs = []
         outputs = []
-        acc, unspentAddressTxs = self.accVer(fr, amount)
+
+        fromWallet = self.wallets.get(fr, False)
+        if not fromWallet:
+            print("There is no such an address: " + fr)
+            return
+
+        acc, unspentAddressTxs = self.accVer(self.pubKeyHash(fromWallet.publicKeyBytes), amount)
 
         if acc < amount:
             print('Not enough units...')
             return
-        # print('Acc:' + str(acc))
 
         for tx in unspentAddressTxs:
-            inputs.append(TransactionInput(tx[0].id, tx[1], fr))
+            inputs.append(TransactionInput(tx[0].id, tx[1], None, fromWallet.publicKeyBytes))
 
-        outputs.append(TransactionOutput(amount, to))
+        outputs.append(TransactionOutput(amount, to, self.version, self.addrCheckSumLen))
         if acc > amount:
-            outputs.append(TransactionOutput(acc - amount, fr))
+            outputs.append(TransactionOutput(acc - amount, fr, self.version, self.addrCheckSumLen))
 
         tx = Transaction(None, inputs, outputs)
         tx.id = self.transactionHash(tx)
 
         return tx
 
-    def genesisBlock(self, to, data):
-        transactions = [self.coinBaseTx(to, data)]
+    def initBlockChain(self, to):
+        print('Mining the Genesis Block with data "Genesis Block"...')
+        transactions = [self.coinBaseTx(to, "Genesis block")]
+        self.blocks.append(self.newBlock(transactions, ''))
         print('Sucess.')
-        return self.newBlock(transactions, '')
-
-    # def addBlock(self, to, data):
-    #     transaction = self.coinBaseTx(to, data)
-    #     prevBlock = self.blocks[len(self.blocks) - 1]
-    #     print('Mining the block with data "' + str(transaction) + '"...', sep='\n')
-    #     last = Last.query.first()
-    #     prevBlock = Blocks.query.filter(Blocks.id == last.last_block_id).all()
-
-    #     newBlock = self.newBlock(data, self.setHash(Block(prevBlock[0].timeStamp, prevBlock[0].data, prevBlock[0].prevHash, prevBlock[0].hash, prevBlock[0].nonce)))
-
-    #     block = Blocks(timeStamp = str(newBlock.timeStamp), data = str(newBlock.transactions), prevHash = str(newBlock.prevHash), hash = str(newBlock.hash), nonce = str(newBlock.nonce))
-    #     db.session.add(block)
-
-    #     last.last_block_id = Blocks.query.count() + 1
-    #     last.last_block_hash = str(newBlock.hash)
-
-    #     db.session.commit()
-    #     print('Sucess.', sep='\n')
-
-    #     self.blocks.append(newBlock)
 
     def addBlock(self, transactions):
         prevBlock = self.blocks[len(self.blocks) - 1]
-        #transaction = self.newTransaction(fr, to, amount)
-        #print('Mining the block with data "' + str(transaction) + '"...', sep='\n')
         print('Mining the block...')
         newBlock = self.newBlock(transactions, self.setHash(Block(prevBlock.timeStamp, prevBlock.transactions, prevBlock.prevHash, prevBlock.hash, prevBlock.nonce)))
         self.blocks.append(newBlock)
@@ -273,13 +256,21 @@ class Chain(object):
         transaction = self.newTransaction(fr, to, amount)
         if transaction:
             self.addBlock([transaction])
-            print('Sucess.')
+            print('Success.')
+
+    def getBalance(self, address):
+        wallet = self.wallets.get(address, False)
+        if not wallet:
+            print("There is no such an address: " + address)
+            return
+        balance = 0
+        for tx in self.unspentTxs(self.pubKeyHash(wallet.publicKeyBytes)):
+            balance += int(tx[2].val)
+        print('Balance of ' + address + ': ' + str(balance))
 
     def showBlocks(self):
         print('All blocks:')
         print('\n')
-        #blocks = Blocks.query.all()
-        #for block in blocks:
         for index, block in enumerate(self.blocks):
             print('Block Id: ' + str(index))
             print('Hash: ' + block.hash)
@@ -292,69 +283,66 @@ class Chain(object):
                 print(' - Transaction id:' + str(transaction.id))
                 print(' - Inputs (count):' + str(len(transaction.vIn)))
                 print(' - Outputs (count):' + str(len(transaction.vOut)))
+                print(' ---')
                 for vInIndex, vIn in enumerate(transaction.vIn):
                     print(' -> Input ' + str(vInIndex))
                     print(' -> Input id:' + str(vIn.id))
-                    print(' -> Input sig:' + vIn.sig)
+                    print(' -> Input sig:' + str(vIn.sig))
                     print(' -> Relative id of output:' + str(vIn.vOut))
-
+                    print(' -> Input pub key(bytes):' + str(vIn.pubKey))
+                    print(' ---')
                 for vOutIndex, vOut in enumerate(transaction.vOut):
                     print(' -> Output ' + str(vOutIndex))
-                    print(' -> Output public key:' + vOut.pubKey)
                     print(' -> Output value:' + str(vOut.val))
+                    print(' -> Output public key(bytes):' + str(vOut.pubKeyHash))
             print('\n')
-            # print('Transactions data: ' + trData)
 
-# DB is working mode
-# class BlockChain(Chain):
-#     def __init__(self):
-#         super(BlockChain, self).__init__()
-#         blocks = Blocks.query.count()
-#         if (int(blocks) == 0):
-#             print('There is no blockchain instance yet. Creating...')
-            # print('Mining the block with data "Genesis block"...', sep='\n')
-            # GB = self.genesisBlock()
-            # block = Blocks(timeStamp = str(GB.timeStamp), data = str(GB.transactions), prevHash = str(GB.prevHash), hash = str(GB.hash), nonce = str(GB.nonce))
-            # db.session.add(block)
-
-            # last = Last(last_block_id = 1, last_block_hash = str(GB.hash))
-            # db.session.add(block)
-
-            # db.session.commit()
-            # print('Sucess.', sep='\n')
-
-            # self.blocks.append(self.genesisBlock())
-
-# DB is not wirking mode
-class newBlockChain(Chain):
-    def __init__(self, to, data = ''):
-        super(newBlockChain, self).__init__()
-        print('There is no blockchain instance yet. Creating...')
-        print('Mining the block with data "Genesis block"...')
-        Gb = self.genesisBlock(to, data)
-        self.blocks.append(Gb)
+class BlockChain(Chain):
+    def __init__(self):
+        super(BlockChain, self).__init__()
+        print('BlockChain instance is created.')
+        print('There is no BlockChain initialization yet.')
 
 print('\n')
 print('Example: ')
 print('\n')
-bc = newBlockChain('Eugene')
+bc = BlockChain()
 print('\n')
-bc.send('Eugene', 'Ivan', 6)
-bc.getBalance('Eugene')
+# Eugene
+print('Create wallet for Eugene:')
+addressEugene = bc.newWallet()
+# Ivan
+print('Create wallet for Ivan:')
+addressIvan = bc.newWallet()
+# Alena
+print('Create wallet for Alena:')
+addressAlena = bc.newWallet()
 print('\n')
-bc.send('Eugene', 'Ivan', 2)
-bc.getBalance('Eugene')
+print('Init blockchain by Eugene ({}):'.format(addressEugene))
+bc.initBlockChain(addressEugene)
+bc.getBalance(addressEugene)
 print('\n')
-bc.send('Eugene', 'Ivan', 2)
-bc.getBalance('Eugene')
+print('Sending data from Eugene({}) to Ivan({}):'.format(addressEugene, addressIvan))
+bc.send(addressEugene, addressIvan, 4)
+bc.getBalance(addressEugene)
+bc.getBalance(addressIvan)
 print('\n')
-bc.send('Ivan', 'Eugene', 7)
-bc.getBalance('Ivan')
+print('Sending data from Ivan({}) to Alena({}):'.format(addressIvan, addressAlena))
+bc.send(addressIvan, addressAlena, 2)
+bc.getBalance(addressIvan)
+bc.getBalance(addressAlena)
 print('\n')
-bc.getBalance('Eugene')
-bc.getBalance('Ivan')
+print('Sending data from Ivan({}) to Eugene({}):'.format(addressIvan, addressEugene))
+bc.send(addressIvan, addressEugene, 4)
 print('\n')
-bc.send('Ivan', 'Eugene', 7)
-bc.getBalance('Ivan')
+print('Sending data from Eugene({}) to Alena({}):'.format(addressEugene, addressAlena))
+bc.send(addressEugene, addressAlena, 1)
+bc.getBalance(addressEugene)
+bc.getBalance(addressAlena)
+print('\n')
+print('Balance of all members:')
+bc.getBalance(addressEugene)
+bc.getBalance(addressIvan)
+bc.getBalance(addressAlena)
 print('\n')
 bc.showBlocks()
