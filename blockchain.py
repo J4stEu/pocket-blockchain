@@ -1,5 +1,5 @@
 import hashlib
-from fastecdsa import keys, curve
+from fastecdsa import curve, ecdsa, keys
 from base58 import b58encode, b58decode
 from datetime import datetime
 #from app import db
@@ -17,10 +17,22 @@ class Transaction(object):
         self.vIn = vIn
         self.vOut = vOut
 
+    def __repr__(self):
+        vInRepresentation = []
+        for vIn in self.vIn:
+            vInRepresentation.append(vIn.__repr__)
+        vOutRepresentation = []
+        for vOut in self.vOut:
+            vOutRepresentation.append(vOut.__repr__)
+        return "Transaction: id = {}, vIn = {}, vOut = {}".format(self.id, vInRepresentation, vOutRepresentation)
+
 class TransactionOutput(object):
-    def __init__(self, val, to, version, addrCheckSumLen):
+    def __init__(self, val, pubKeyHash):
         self.val = val
-        self.pubKeyHash = self.lock(to, version, addrCheckSumLen)
+        self.pubKeyHash = pubKeyHash
+
+    def __repr__(self):
+        return "TransactionOutput: val = {}, pubKeyHash = {}".format(self.val, self.pubKeyHash)
 
     def lock(self, address, version, addrCheckSumLen):
         pubKeyHash = b58decode(address)
@@ -31,11 +43,15 @@ class TransactionOutput(object):
         return pubKeyHash == self.pubKeyHash
 
 class TransactionInput(object):
-    def __init__(self, id, vOut, sig, pubKey):
+    def __init__(self, id, vOut, sig, pubKey, pubKeyBytes):
         self.id = id
         self.vOut = vOut
         self.sig = sig
         self.pubKey = pubKey
+        self.pubKeyBytes = pubKeyBytes
+
+    def __repr__(self):
+        return "TransactionInput: id = {}, vOut = {}, sig = {}, pubKey = {}, pubKeyBytes = {}".format(self.id, self.vOut, self.sig, self.pubKey, self.pubKeyBytes)
 
     def usesKey(self, pubKey, pubKeyHash):
         return pubKey == pubKeyHash
@@ -89,6 +105,74 @@ class Chain(object):
         address = b58encode(pubKeyHash + checksum)
         return address
 
+    def signTransaction(self, transaction, privateKey):
+        if self.isCoinBase(transaction):
+            return
+        prevTransactions = {}
+        for vIn in transaction.vIn:
+            prevTransaction = self.findTransaction(vIn.id)
+            if prevTransaction == None:
+                print('Failed to find previous transaction')
+                return
+            prevTransactions[prevTransaction.id] = prevTransaction
+        return self.sign(transaction, prevTransactions, privateKey)
+
+    def sign(self, transaction, prevTransactions, privateKey):
+        for vIn in transaction.vIn:
+            if not (vIn.id in prevTransactions and prevTransactions[vIn.id].id):
+                print('Previous transaction is not correct')
+                return
+        txTrimmedCopy = self.txTrimmedCopy(transaction)
+        for index, vIn in enumerate(txTrimmedCopy.vIn):
+            prevTransaction = prevTransactions[vIn.id]
+            vIn.sig = None
+            vIn.pubKeyBytes = prevTransaction.vOut[vIn.vOut].pubKeyHash
+            dataToSign = txTrimmedCopy.__repr__()
+            r, s = ecdsa.sign(dataToSign, privateKey)
+            transaction.vIn[index].sig = {'r': r, 's': s}
+            vIn.pubKey = None
+        return transaction
+
+    def verifyTransaction(self, transaction):
+        if self.isCoinBase(transaction):
+            return
+        prevTransactions = {}
+        for vIn in transaction.vIn:
+            prevTransaction = self.findTransaction(vIn.id)
+            if prevTransaction == None:
+                print('Failed to find previous transaction')
+                return
+            prevTransactions[prevTransaction.id] = prevTransaction
+        return self.verify(transaction, prevTransactions)
+
+    def verify(self, transaction, prevTransactions):
+        for vIn in transaction.vIn:
+            if not (vIn.id in prevTransactions and prevTransactions[vIn.id].id):
+                print('Previous transaction is not correct')
+                return
+        txTrimmedCopy = self.txTrimmedCopy(transaction)
+        for index, vIn in enumerate(transaction.vIn):
+            prevTransaction = prevTransactions[vIn.id]
+            txTrimmedCopy.vIn[index].sig = None
+            txTrimmedCopy.vIn[index].pubKeyBytes = prevTransaction.vOut[vIn.vOut].pubKeyHash
+            if vIn.sig == None:
+                return False
+            r, s = vIn.sig['r'], vIn.sig['s']
+            dataToVerify = txTrimmedCopy.__repr__()
+            verify = ecdsa.verify((r, s), dataToVerify, vIn.pubKey)
+            if verify == False:
+                return False
+        return True
+
+    def txTrimmedCopy(self, transaction):
+        inputs = []
+        outputs = []
+        for vIn in transaction.vIn:
+            inputs.append(TransactionInput(vIn.id, vIn.vOut, None, None, None))
+        for vOut in transaction.vOut:
+            outputs.append(TransactionOutput(vOut.val, vOut.pubKeyHash))
+        return Transaction(transaction.id, inputs, outputs)
+
     # def isAddressValid(self, address):
     #     pubKeyHash = b58decode(address)
     #     # pub key
@@ -117,6 +201,21 @@ class Chain(object):
             else:
                 nonce += 1
         return dataHash, nonce
+
+    def testProofOfWork(self, data, nonceToCheck = None):
+        target = int(str(int(10**round((256 - self.targetBits)/4))), 16) # target bits -> target instance
+        maxInt64 = int(9223372036854775807) # 64 bits (8 bytes). To prevent overflow
+        nonce = 0
+        origHash = hashlib.sha256((data + '{:x}'.format(int(nonceToCheck)) if nonceToCheck != None else "").encode('utf-8')).hexdigest()
+        while nonce < maxInt64:
+            allInOne = data +'{:x}'.format(int(nonce)) if nonce != 0 else ""
+            dataHash = hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
+            # cmp
+            if ((int(dataHash, 16) > target) - (int(dataHash, 16) < target)) == -1:
+                break
+            else:
+                nonce += 1
+        print("Original hash: {}, Hash with nonce: {}, Nonce: {}, Nonce(hex): {}".format(origHash, dataHash, nonce, '{:x}'.format(int(nonce))))
 
     # check if proof of work is valid for a single block
     def blockProofCheck(self, block):
@@ -156,11 +255,15 @@ class Chain(object):
         return txHash
 
     def coinBaseTx(self, to, data):
-        tIn = TransactionInput(None, -1, None, data)
-        tOut = TransactionOutput(self.signUnit, to, self.version, self.addrCheckSumLen)
+        tIn = TransactionInput(None, -1, None, None, data)
+        tOut = TransactionOutput(self.signUnit, None)
+        tOut.pubKeyHash = tOut.lock(to, self.version, self.addrCheckSumLen)
         tr = Transaction(0, [tIn], [tOut])
         tr.id = self.transactionHash(tr)
         return tr
+
+    def isCoinBase(self, transaction):
+        return len(transaction.vIn) == 1 and transaction.vIn[0].id == None and transaction.vIn[0].vOut == -1
 
     def unspentTxs(self, pubKeyHash):
         unspentTxs = []
@@ -182,7 +285,7 @@ class Chain(object):
                         unspentTxs.append([tx, index, vOut])
                 for vIn in tx.vIn:
                     if vIn.vOut == -1: break # first transaction
-                    if vIn.usesKey(self.pubKeyHash(vIn.pubKey), pubKeyHash):
+                    if vIn.usesKey(self.pubKeyHash(vIn.pubKeyBytes), pubKeyHash):
                         unlockingInputs.append(vIn)
         # we have unlocking inputs and unspent transactions -> get valid unspent transactions
         if len(unlockingInputs) == 0:
@@ -227,16 +330,28 @@ class Chain(object):
             return
 
         for tx in unspentAddressTxs:
-            inputs.append(TransactionInput(tx[0].id, tx[1], None, fromWallet.publicKeyBytes))
+            inputs.append(TransactionInput(tx[0].id, tx[1], None, fromWallet.publicKey, fromWallet.publicKeyBytes))
 
-        outputs.append(TransactionOutput(amount, to, self.version, self.addrCheckSumLen))
+        output = TransactionOutput(amount, None)
+        output.pubKeyHash = output.lock(to, self.version, self.addrCheckSumLen)
+        outputs.append(output)
+
         if acc > amount:
-            outputs.append(TransactionOutput(acc - amount, fr, self.version, self.addrCheckSumLen))
+            output = TransactionOutput(acc - amount, None)
+            output.pubKeyHash = output.lock(fr, self.version, self.addrCheckSumLen)
+            outputs.append(output)
 
         tx = Transaction(None, inputs, outputs)
         tx.id = self.transactionHash(tx)
-
+        tx = self.signTransaction(tx, fromWallet.privateKey)
         return tx
+
+    def findTransaction(self, id):
+        for block in self.blocks:
+            for tx in block.transactions:
+                if tx.id == id:
+                    return tx
+        return None
 
     def initBlockChain(self, to):
         print('Mining the Genesis Block with data "Genesis Block"...')
@@ -245,18 +360,26 @@ class Chain(object):
         print('Sucess.')
 
     def addBlock(self, transactions):
-        prevBlock = self.blocks[len(self.blocks) - 1]
         print('Mining the block...')
+        for tx in transactions:
+            if self.verifyTransaction(tx) == False:
+                print('Invalid transaction')
+                return False
+        prevBlock = self.blocks[len(self.blocks) - 1]
         newBlock = self.newBlock(transactions, self.setHash(Block(prevBlock.timeStamp, prevBlock.transactions, prevBlock.prevHash, prevBlock.hash, prevBlock.nonce)))
         self.blocks.append(newBlock)
+        return True
 
     def send(self, fr, to, amount):
         print('Sending data=' + str(amount) + ' from ' + fr + ' to ' + to)
         # here should be all new transactions.
         transaction = self.newTransaction(fr, to, amount)
         if transaction:
-            self.addBlock([transaction])
-            print('Success.')
+            blockIsAdded = self.addBlock([transaction])
+            if blockIsAdded:
+                print('Success.')
+            else:
+                print('Error.')
 
     def getBalance(self, address):
         wallet = self.wallets.get(address, False)
@@ -279,7 +402,7 @@ class Chain(object):
             print('Time: ' + str(block.timeStamp))
             print('Transactions(count): ' + str(len(block.transactions)))
             for index, transaction in enumerate(block.transactions):
-                print(' - Transaction ' + str(index + 1))
+                print(' - Transaction ' + str(index + 1) + '(coin base transaction)' if self.isCoinBase(transaction) else '')
                 print(' - Transaction id:' + str(transaction.id))
                 print(' - Inputs (count):' + str(len(transaction.vIn)))
                 print(' - Outputs (count):' + str(len(transaction.vOut)))
@@ -289,7 +412,9 @@ class Chain(object):
                     print(' -> Input id:' + str(vIn.id))
                     print(' -> Input sig:' + str(vIn.sig))
                     print(' -> Relative id of output:' + str(vIn.vOut))
-                    print(' -> Input pub key(bytes):' + str(vIn.pubKey))
+                    if not self.isCoinBase(transaction):
+                        print(' -> Input pub key (elliptic curve):' + 'X: {}, Y: {}'.format(str(vIn.pubKey.x), str(vIn.pubKey.y)))
+                        print(' -> Input pub key(bytes):' + str(vIn.pubKeyBytes))
                     print(' ---')
                 for vOutIndex, vOut in enumerate(transaction.vOut):
                     print(' -> Output ' + str(vOutIndex))
@@ -311,6 +436,7 @@ print('\n')
 # Eugene
 print('Create wallet for Eugene:')
 addressEugene = bc.newWallet()
+# bc.testProofOfWork("Data")
 # Ivan
 print('Create wallet for Ivan:')
 addressIvan = bc.newWallet()
