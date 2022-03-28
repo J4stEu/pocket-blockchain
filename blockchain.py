@@ -341,6 +341,11 @@ class Chain(object):
             output.pubKeyHash = output.lock(fr, self.version, self.addrCheckSumLen)
             outputs.append(output)
 
+        # reward
+        output = TransactionOutput(self.signUnit, None)
+        output.pubKeyHash = output.lock(fr, self.version, self.addrCheckSumLen)
+        outputs.append(output)
+
         tx = Transaction(None, inputs, outputs)
         tx.id = self.transactionHash(tx)
         tx = self.signTransaction(tx, fromWallet.privateKey)
