@@ -8,6 +8,8 @@ import codecs
 from base58 import b58encode, b58decode
 from datetime import datetime
 import json
+from app import db
+import models
 
 
 # from app import db
@@ -82,7 +84,7 @@ class Block(object):
 
 class Chain(object):
     def __init__(self):
-        self.blocks = []
+        # self.blocks = []
         self.wallets = {}
         # targetBits - we can change target bits due to control complexity of making new blocks
         # self.targetBits = int(24)
@@ -209,7 +211,7 @@ class Chain(object):
         return txHash
 
     def coinBaseTx(self, to, data):
-        tIn = TransactionInput(None, -1, None, None, data)
+        tIn = TransactionInput(None, -1, None, data, data)
         tOut = TransactionOutput(self.signUnit, None)
         tOut.pubKeyHash = tOut.lock(to, self.version, self.addrCheckSumLen)
         tr = Transaction(0, [tIn], [tOut])
@@ -223,7 +225,12 @@ class Chain(object):
         unspentTxs = []
         unlockingInputs = []
         unspentValidTxs = []
-        for block in self.blocks:
+        blocks = models.Blocks.query.all()
+        if blocks == None:
+            print("Blockchain is not initialized yet.")
+            return
+        for serializedBlock in blocks:
+            block = self.deSerialize(serializedBlock.serializedBlock)
             for tx in block.transactions:
                 for index, vOut in enumerate(tx.vOut):
                     move = True
@@ -306,7 +313,12 @@ class Chain(object):
         return tx
 
     def findTransaction(self, id):
-        for block in self.blocks:
+        blocks = models.Blocks.query.all()
+        if blocks == None:
+            print("Blockchain is not initialized yet.")
+            return None
+        for serializedBlock in blocks:
+            block = self.deSerialize(serializedBlock.serializedBlock)
             for tx in block.transactions:
                 if tx.id == id:
                     return tx
@@ -349,6 +361,7 @@ class Chain(object):
                 nonce += 1
         print("Original hash: {}, Hash with nonce: {}, Nonce: {}, Nonce(hex): {}".format(origHash, dataHash, nonce,
                                                                                          '{:x}'.format(int(nonce))))
+
     # check if proof of work is valid for a single block
     def checkBlockPoW(self, block):
         target = int(str(int(10 ** round((256 - self.targetBits) / 4))), 16)
@@ -384,21 +397,37 @@ class Chain(object):
             if self.verifyTransaction(tx) == False:
                 print('Invalid transaction')
                 return False
-        prevBlock = self.blocks[len(self.blocks) - 1]
+        # prevBlock = self.blocks[len(self.blocks) - 1]
+        lastBlock = models.LastBlock.query.first()
+        prevBlock = models.Blocks.query.filter_by(hash=lastBlock.hash).first()
+        if prevBlock == None:
+            print("Blockchain is not initialized yet.")
+            return
+        prevBlock = self.deSerialize(prevBlock.serializedBlock)
         newBlock = self.newBlock(
             transactions,
             self.setHash(
                 Block(
-                        prevBlock.timeStamp,
-                        prevBlock.transactions,
-                        prevBlock.prevHash,
-                        prevBlock.hash,
-                        prevBlock.nonce
-                    )
+                    prevBlock.timeStamp,
+                    prevBlock.transactions,
+                    prevBlock.prevHash,
+                    prevBlock.hash,
+                    prevBlock.nonce
+                )
             )
         )
-        self.serialize(newBlock)
-        self.blocks.append(newBlock)
+        serializedBlock = self.serialize(newBlock)
+        # deSerializedBlock = self.deSerialize(serializedBlock)
+        dbBlock = models.Blocks(hash=newBlock.hash, serializedBlock=serializedBlock)
+        db.session.add(dbBlock)
+        dbLastBlock = models.LastBlock.query.first()
+        if dbLastBlock == None:
+            dbLastBlock = models.LastBlock(hash=newBlock.hash)
+            db.session.add(dbLastBlock)
+        else:
+            dbLastBlock.hash = newBlock.hash
+        db.session.commit()
+        # self.blocks.append(newBlock)
         return True
 
     def send(self, fr, to, amount):
@@ -424,7 +453,12 @@ class Chain(object):
     def showBlocks(self):
         print('All blocks:')
         print('\n')
-        for index, block in enumerate(self.blocks):
+        blocks = models.Blocks.query.all()
+        if blocks == None:
+            print("Blockchain is not initialized yet.")
+            return None
+        for index, serializedBlock in enumerate(blocks):
+            block = self.deSerialize(serializedBlock.serializedBlock)
             print('Block Id: ' + str(index))
             print('Hash: ' + block.hash)
             print('Nonce: ' + str(block.nonce))
@@ -455,17 +489,31 @@ class Chain(object):
             print('\n')
 
     def initSystem(self, to):
-        print('Mining the Genesis Block with data "Genesis Block"...')
-        transactions = [self.coinBaseTx(to, "Genesis block")]
-        self.blocks.append(self.newBlock(transactions, ''))
-        print('Sucess.')
+        dbBlock = models.Blocks.query.first()
+        if dbBlock != None:
+            print("Blockchain system is already initialized.")
+        else:
+            print('Mining the Genesis Block with data "Genesis Block"...')
+            transactions = [self.coinBaseTx(to, "Genesis block")]
+            genesisBlock = self.newBlock(transactions, '')
+            serializedGenesisBlock = self.serialize(genesisBlock)
+            dbBlock = models.Blocks(hash=genesisBlock.hash, serializedBlock=serializedGenesisBlock)
+            db.session.add(dbBlock)
+            dbLastBlock = models.LastBlock(hash=genesisBlock.hash)
+            db.session.add(dbLastBlock)
+            db.session.commit()
+            # self.blocks.append(self.newBlock(transactions, ''))
+            print('Sucess.')
+
+    def isSerializedCoinbaseTx(self, jsonTx):
+        return len(jsonTx["vIn"]) == 1 and json.loads(jsonTx["vIn"][0])["id"] == None and json.loads(jsonTx["vIn"][0])["vOut"] == -1
 
     def serialize(self, block):
-        data = {
+        jsonBlock = {
             "timeStamp": block.timeStamp.isoformat(),
             "transactions": [],
             "prevHash": block.prevHash,
-            "hash": block.prevHash,
+            "hash": block.hash,
             "nonce": block.nonce
         }
         for tx in block.transactions:
@@ -475,16 +523,12 @@ class Chain(object):
                 "vOut": []
             }
             for vIn in tx.vIn:
-                # typePubKeyBytes = type(vIn.pubKeyBytes)
-                # bytesToString = codecs.decode(vIn.pubKeyBytes, "latin1")
-                # stringToBytes = codecs.encode(bytesToString, "latin1")
-                # trueConversion = vIn.pubKeyBytes == stringToBytes
                 jsonVin = {
                     "id": vIn.id,
                     "vOut": vIn.vOut,
-                    "sig": (DEREncoder.encode_signature(vIn.sig["r"], vIn.sig["s"])).decode("latin1"),
-                    "pubKey": PEMEncoder.encode_public_key(vIn.pubKey),
-                    "pubKeyBytes": (vIn.pubKeyBytes).decode("latin1")
+                    "sig": (DEREncoder.encode_signature(vIn.sig["r"], vIn.sig["s"])).decode("latin1") if not self.isCoinBase(tx) else None,
+                    "pubKey": PEMEncoder.encode_public_key(vIn.pubKey) if not self.isCoinBase(tx) else vIn.pubKey,
+                    "pubKeyBytes": (vIn.pubKeyBytes).decode("latin1") if not self.isCoinBase(tx) else vIn.pubKeyBytes
                 }
                 jsonTx["vIn"].append(json.dumps(jsonVin))
             for vOut in tx.vOut:
@@ -493,23 +537,63 @@ class Chain(object):
                     "pubKeyHash": (vOut.pubKeyHash).decode("latin1")
                 }
                 jsonTx["vOut"].append(json.dumps(jsonvOut))
-            data["transactions"].append(json.dumps(jsonTx))
-        jsonData = json.dumps(data)
+            jsonBlock["transactions"].append(json.dumps(jsonTx))
+        jsonData = json.dumps(jsonBlock)
+        return jsonData
 
-        # backData = json.loads(jsonData)
-        # backData["timeStamp"] = datetime.fromisoformat(backData["timeStamp"])
-        # decodePublicKey = PEMEncoder.decode_public_key(vInpubKeyEncoded, curve=curve.P256)
-        # decodeSign = DEREncoder.decode_signature(sign)
-        # stringToBytes = codecs.encode(bytesToString, "latin1")
-
-        pass
+    def deSerialize(self, jsonData):
+        jsonBlock = json.loads(jsonData)
+        blockTx = []
+        for tx in jsonBlock["transactions"]:
+            jsonTx = json.loads(tx)
+            blockVin = []
+            for vIn in jsonTx["vIn"]:
+                jsonVin = json.loads(vIn)
+                sig = DEREncoder.decode_signature(jsonVin["sig"].encode("latin1")) if jsonVin["sig"] != None else None
+                blockVin.append(
+                    TransactionInput(
+                        jsonVin["id"],
+                        jsonVin["vOut"],
+                        {'r': sig[0], 's': sig[1]} if not self.isSerializedCoinbaseTx(jsonTx) else sig,
+                        PEMEncoder.decode_public_key(jsonVin["pubKey"], curve=curve.P256) if not self.isSerializedCoinbaseTx(jsonTx) else jsonVin["pubKey"],
+                        jsonVin["pubKeyBytes"].encode("latin1") if not self.isSerializedCoinbaseTx(jsonTx) else jsonVin["pubKeyBytes"]
+                    )
+                )
+            blockVout = []
+            for vOut in jsonTx["vOut"]:
+                jsonVout = json.loads(vOut)
+                blockVout.append(
+                    TransactionOutput(
+                        jsonVout["val"],
+                        jsonVout["pubKeyHash"].encode("latin1")
+                    )
+                )
+            blockTx.append(
+                Transaction(
+                    jsonTx["id"],
+                    blockVin,
+                    blockVout
+                )
+            )
+        block = Block(
+            datetime.fromisoformat(jsonBlock["timeStamp"]),
+            blockTx,
+            jsonBlock["prevHash"],
+            jsonBlock["hash"],
+            jsonBlock["nonce"]
+        )
+        return block
 
 
 class BlockChain(Chain):
     def __init__(self):
         super(BlockChain, self).__init__()
         print('BlockChain instance is created.')
-        print('There is no BlockChain initialization yet.')
+        dbBlock = models.Blocks.query.first()
+        if dbBlock != None:
+            print("Blockchain system is already initialized.")
+        else:
+            print('Blockchain is not initialized yet.')
 
 
 print('\n')

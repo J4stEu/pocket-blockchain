@@ -1,7 +1,8 @@
-from app import application
-from app import db
-#from app import migrate, manager
+from app import app
+from app import migrate
+import routes
+
 
 if __name__ == '__main__':
-    application.run()
-    #manager.run()
+    app.run(host='localhost')
+    migrate.run()
