@@ -27,4 +27,15 @@ class LastBlock(db.Model):
     def __repr__(self):
         return 'hash: {}>'.format(self.hash)
 
-# chain state
+# chainstate - store unspent tx outputs (cache)
+class UTXO(db.Model):
+    __tablename__ = 'c'
+
+    txID = db.Column(db.String(256), nullable=False)
+    serializedUnspentOutputs = db.Column(db.Text, primary_key=True, nullable=False)
+
+    def __init__(self, *args, **kwargs):
+        super(UTXO, self).__init__(*args, **kwargs)
+
+    def __repr__(self):
+        return 'txID: {}, serializedOutput: {}>'.format(self.txID, self.serializedOutput)
