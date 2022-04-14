@@ -1,4 +1,6 @@
 import hashlib
+import os.path
+
 from fastecdsa import curve, ecdsa, keys
 from fastecdsa.encoding.pem import PEMEncoder
 from fastecdsa.encoding.der import DEREncoder
@@ -82,7 +84,8 @@ class Block(object):
 class Chain(object):
     def __init__(self):
         # self.blocks = []
-        self.wallets = {}
+        # self.wallets = {}
+        self.wallets_store = "./wallets.bcw"
         # target_bits - we can change target bits due to control complexity of making new blocks
         # self.target_bits = int(24)
         self.target_bits = int(12)
@@ -97,9 +100,62 @@ class Chain(object):
         pr_key, pub_key, pub_key_bytes = self.new_key_pair()
         wallet = Wallet(pr_key, pub_key, pub_key_bytes)
         address = str(self.get_address(wallet), 'utf-8')
-        self.wallets[address] = wallet
+        self.save_wallet(wallet, address)
+        # self.wallets[address] = wallet
         print('Your new address: ' + address)
         return address
+
+    def serialize_wallet(self, wallet):
+        return {
+            "privateKey": wallet.private_key,
+            "publicKey": PEMEncoder.encode_public_key(wallet.public_key),
+            "publicKeyBytes": (wallet.public_key_bytes).decode("latin1")
+        }
+
+    def serialize_wallets(self, wallets):
+        serialized_wallets = {}
+        for address, wallet in wallets.items():
+            serialized_wallets[address] = self.serialize_wallet(wallet)
+        return serialized_wallets
+
+    def de_serialize_wallet(self, wallet):
+        return Wallet(
+            wallet["privateKey"],
+            PEMEncoder.decode_public_key(wallet["publicKey"], curve=curve.P256),
+            wallet["publicKeyBytes"].encode("latin1"),
+        )
+
+    def de_serialize_wallets(self, serialized_wallets):
+        wallets = {}
+        for address, serialized_wallet in serialized_wallets.items():
+            wallet = self.de_serialize_wallet(serialized_wallet)
+            wallets[address] = wallet
+        return wallets
+
+    def save_wallet(self, wallet, address):
+        wallets_bcw = os.path.isfile(self.wallets_store)
+        if wallets_bcw:
+            with open(self.wallets_store, 'r') as f:
+                serialized_wallets = json.load(f)
+            wallets = self.de_serialize_wallets(serialized_wallets)
+            wallets[address] = wallet
+            new_serialized_wallets = self.serialize_wallets(wallets)
+            with open(self.wallets_store, 'w') as f:
+                json.dump(new_serialized_wallets, f)
+        else:
+            wallets = {address: wallet}
+            new_serialized_wallets = self.serialize_wallets(wallets)
+            with open(self.wallets_store, 'w') as f:
+                json.dump(new_serialized_wallets, f)
+
+    def get_wallets(self):
+        wallets_bcw = os.path.isfile(self.wallets_store)
+        if not wallets_bcw:
+            print("There is no any wallets.")
+            return None
+        with open(self.wallets_store, 'r') as f:
+            serialized_wallets = json.load(f)
+        return self.de_serialize_wallets(serialized_wallets)
 
     def new_key_pair(self):
         # generate a private key for curve P256
@@ -222,10 +278,9 @@ class Chain(object):
         unspent_txs = []
         unlocking_inputs = []
         unspent_valid_txs = []
-        blocks = models.Blocks.query.all()
+        blocks = self.get_blocks()
         if blocks is None:
-            print("Blockchain is not initialized yet.")
-            return
+            return None
         for serialized_block in blocks:
             block = self.de_serialize(serialized_block.serializedBlock)
             for tx in block.transactions:
@@ -276,7 +331,7 @@ class Chain(object):
         inputs = []
         outputs = []
 
-        from_wallet = self.wallets.get(fr, False)
+        from_wallet = self.get_wallets().get(fr, False)
         if not from_wallet:
             print("There is no such an address: " + fr)
             return
@@ -300,6 +355,7 @@ class Chain(object):
             outputs.append(output)
 
         # reward
+        print("Reward to {} for mining the block: {}".format(to, str(self.sign_unit)))
         output = TransactionOutput(self.sign_unit, None)
         output.pub_key_hash = output.lock(fr, self.version, self.addr_check_sum_len)
         outputs.append(output)
@@ -310,9 +366,8 @@ class Chain(object):
         return tx
 
     def find_transaction(self, id):
-        blocks = models.Blocks.query.all()
+        blocks = self.get_blocks()
         if blocks is None:
-            print("Blockchain is not initialized yet.")
             return None
         for serialized_block in blocks:
             block = self.de_serialize(serialized_block.serializedBlock)
@@ -371,10 +426,9 @@ class Chain(object):
         return ((int(data_hash, 16) > target) - (int(data_hash, 16) < target)) == -1
 
     def check_pow(self):
-        blocks = models.Blocks.query.all()
+        blocks = self.get_blocks()
         if blocks is None:
-            print("Blockchain is not initialized yet.")
-            return
+            return None
         for serialized_block in blocks:
             block = self.de_serialize(serialized_block.serializedBlock)
             print('Proof of work: ' + 'valid' if self.check_block_pow(block) else 'invalid')
@@ -443,21 +497,24 @@ class Chain(object):
                 print('Error.')
 
     def get_balance(self, address):
-        wallet = self.wallets.get(address, False)
+        wallets = self.get_wallets()
+        wallet = wallets.get(address, False)
         if not wallet:
             print("There is no such an address: " + address)
             return
         balance = 0
-        for tx in self.unspent_txs(self.pub_key_hash(wallet.public_key_bytes)):
+        unspent_txs = self.unspent_txs(self.pub_key_hash(wallet.public_key_bytes))
+        if unspent_txs is None:
+            return
+        for tx in unspent_txs:
             balance += int(tx[2].val)
         print('Balance of ' + address + ': ' + str(balance))
 
     def show_blocks(self):
         print('All blocks:')
         print('\n')
-        blocks = models.Blocks.query.all()
+        blocks = self.get_blocks()
         if blocks is None:
-            print("Blockchain is not initialized yet.")
             return None
         for index, serialized_block in enumerate(blocks):
             block = self.de_serialize(serialized_block.serializedBlock)
@@ -490,9 +547,22 @@ class Chain(object):
                     print(' -> Output public key(bytes):' + str(v_out.pub_key_hash))
             print('\n')
 
-    def init_system(self, to):
+    def get_blocks(self):
+        if self.is_system_initialized():
+            return models.Blocks.query.all()
+        else:
+            print("Blockchain is not initialized yet.")
+            return None
+
+    def is_system_initialized(self):
         db_block = models.Blocks.query.first()
         if db_block is not None:
+            return True
+        else:
+            return False
+
+    def init_system(self, to):
+        if self.is_system_initialized():
             print("Blockchain system is already initialized.")
         else:
             print('Mining the Genesis Block with data "Genesis Block"...')
@@ -504,7 +574,6 @@ class Chain(object):
             db_last_block = models.LastBlock(hash=genesis_block.hash)
             db.session.add(db_last_block)
             db.session.commit()
-            # self.blocks.append(self.newBlock(transactions, ''))
             print('Success.')
 
     def is_serialized_soinbase_tx(self, jsonTx):
@@ -560,11 +629,8 @@ class Chain(object):
                         json_vin["id"],
                         json_vin["vOut"],
                         {'r': sig[0], 's': sig[1]} if not self.is_serialized_soinbase_tx(json_tx) else sig,
-                        PEMEncoder.decode_public_key(json_vin["pubKey"],
-                                                     curve=curve.P256) if not self.is_serialized_soinbase_tx(json_tx) else
-                        json_vin["pubKey"],
-                        json_vin["pubKeyBytes"].encode("latin1") if not self.is_serialized_soinbase_tx(json_tx) else json_vin[
-                            "pubKeyBytes"]
+                        PEMEncoder.decode_public_key(json_vin["pubKey"], curve=curve.P256) if not self.is_serialized_soinbase_tx(json_tx) else json_vin["pubKey"],
+                        json_vin["pubKeyBytes"].encode("latin1") if not self.is_serialized_soinbase_tx(json_tx) else json_vin["pubKeyBytes"]
                     )
                 )
             block_vout = []
@@ -597,54 +663,7 @@ class BlockChain(Chain):
     def __init__(self):
         super(BlockChain, self).__init__()
         print('BlockChain instance is created.')
-        db_block = models.Blocks.query.first()
-        if db_block is not None:
+        if self.is_system_initialized():
             print("Blockchain system is already initialized.")
         else:
             print('Blockchain is not initialized yet.')
-
-
-print('\n')
-print('Example: ')
-print('\n')
-bc = BlockChain()
-print('\n')
-# Eugene
-print('Create wallet for Eugene:')
-addressEugene = bc.new_wallet()
-# bc.testPoW("Data")
-# Ivan
-print('Create wallet for Ivan:')
-addressIvan = bc.new_wallet()
-# Alena
-print('Create wallet for Alena:')
-addressAlena = bc.new_wallet()
-print('\n')
-print('Init blockchain by Eugene ({}):'.format(addressEugene))
-bc.init_system(addressEugene)
-bc.get_balance(addressEugene)
-print('\n')
-print('Sending data from Eugene({}) to Ivan({}):'.format(addressEugene, addressIvan))
-bc.send(addressEugene, addressIvan, 4)
-bc.get_balance(addressEugene)
-bc.get_balance(addressIvan)
-print('\n')
-print('Sending data from Ivan({}) to Alena({}):'.format(addressIvan, addressAlena))
-bc.send(addressIvan, addressAlena, 2)
-bc.get_balance(addressIvan)
-bc.get_balance(addressAlena)
-print('\n')
-print('Sending data from Ivan({}) to Eugene({}):'.format(addressIvan, addressEugene))
-bc.send(addressIvan, addressEugene, 4)
-print('\n')
-print('Sending data from Eugene({}) to Alena({}):'.format(addressEugene, addressAlena))
-bc.send(addressEugene, addressAlena, 1)
-bc.get_balance(addressEugene)
-bc.get_balance(addressAlena)
-print('\n')
-print('Balance of all members:')
-bc.get_balance(addressEugene)
-bc.get_balance(addressIvan)
-bc.get_balance(addressAlena)
-print('\n')
-bc.show_blocks()
