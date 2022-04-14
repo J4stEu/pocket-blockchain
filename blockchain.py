@@ -1,10 +1,7 @@
 import hashlib
 from fastecdsa import curve, ecdsa, keys
-# keys encoder
 from fastecdsa.encoding.pem import PEMEncoder
-# signatures encoder
 from fastecdsa.encoding.der import DEREncoder
-import codecs
 from base58 import b58encode, b58decode
 from datetime import datetime
 import json
@@ -16,68 +13,68 @@ import models
 # from models import *
 
 class Wallet(object):
-    def __init__(self, privateKey, publicKey, publicKeyBytes):
-        self.privateKey = privateKey
-        self.publicKey = publicKey
-        self.publicKeyBytes = publicKeyBytes
+    def __init__(self, private_key, public_key, public_key_bytes):
+        self.private_key = private_key
+        self.public_key = public_key
+        self.public_key_bytes = public_key_bytes
 
 
 class Transaction(object):
-    def __init__(self, id, vIn, vOut):
+    def __init__(self, id, v_in, v_out):
         self.id = id
-        self.vIn = vIn
-        self.vOut = vOut
+        self.v_in = v_in
+        self.v_out = v_out
 
     def __repr__(self):
-        vInRepresentation = []
-        for vIn in self.vIn:
-            vInRepresentation.append(vIn.__repr__)
-        vOutRepresentation = []
-        for vOut in self.vOut:
-            vOutRepresentation.append(vOut.__repr__)
-        return "Transaction: id = {}, vIn = {}, vOut = {}".format(self.id, vInRepresentation, vOutRepresentation)
+        v_in_representation = []
+        for v_in in self.v_in:
+            v_in_representation.append(v_in.__repr__)
+        v_out_representation = []
+        for v_out in self.v_out:
+            v_out_representation.append(v_out.__repr__)
+        return "Transaction: id = {}, vIn = {}, vOut = {}".format(self.id, v_in_representation, v_out_representation)
 
 
 class TransactionInput(object):
-    def __init__(self, id, vOut, sig, pubKey, pubKeyBytes):
+    def __init__(self, id, v_out, sig, pub_key, pub_key_bytes):
         self.id = id
-        self.vOut = vOut
+        self.v_out = v_out
         self.sig = sig
-        self.pubKey = pubKey
-        self.pubKeyBytes = pubKeyBytes
+        self.pub_key = pub_key
+        self.pub_key_bytes = pub_key_bytes
 
     def __repr__(self):
         return "TransactionInput: " \
                "id = {}, vOut = {}, " \
                "sig = {}, pubKey = {}, " \
-               "pubKeyBytes = {}".format(self.id, self.vOut, self.sig, self.pubKey, self.pubKeyBytes)
+               "pubKeyBytes = {}".format(self.id, self.v_out, self.sig, self.pub_key, self.pub_key_bytes)
 
-    def usesKey(self, pubKey, pubKeyHash):
-        return pubKey == pubKeyHash
+    def uses_key(self, pub_key, pub_key_hash):
+        return pub_key == pub_key_hash
 
 
 class TransactionOutput(object):
-    def __init__(self, val, pubKeyHash):
+    def __init__(self, val, pub_key_hash):
         self.val = val
-        self.pubKeyHash = pubKeyHash
+        self.pub_key_hash = pub_key_hash
 
     def __repr__(self):
-        return "TransactionOutput: val = {}, pubKeyHash = {}".format(self.val, self.pubKeyHash)
+        return "TransactionOutput: val = {}, pubKeyHash = {}".format(self.val, self.pub_key_hash)
 
-    def lock(self, address, version, addrCheckSumLen):
-        pubKeyHash = b58decode(address)
-        pubKeyHash = pubKeyHash[len(version): len(pubKeyHash) - addrCheckSumLen]
-        return pubKeyHash
+    def lock(self, address, version, addr_check_sum_len):
+        pub_key_hash = b58decode(address)
+        pub_key_hash = pub_key_hash[len(version): len(pub_key_hash) - addr_check_sum_len]
+        return pub_key_hash
 
-    def isLockedWithKey(self, pubKeyHash):
-        return pubKeyHash == self.pubKeyHash
+    def is_locked_with_key(self, pub_key_hash):
+        return pub_key_hash == self.pub_key_hash
 
 
 class Block(object):
-    def __init__(self, timeStamp, transactions, prevHash, hash, nonce):
-        self.timeStamp = timeStamp
+    def __init__(self, time_stamp, transactions, prev_hash, hash, nonce):
+        self.time_stamp = time_stamp
         self.transactions = transactions
-        self.prevHash = prevHash
+        self.prev_hash = prev_hash
         self.hash = hash
         self.nonce = nonce
 
@@ -86,501 +83,512 @@ class Chain(object):
     def __init__(self):
         # self.blocks = []
         self.wallets = {}
-        # targetBits - we can change target bits due to control complexity of making new blocks
-        # self.targetBits = int(24)
-        self.targetBits = int(12)
-        # signUnit - reward value for mining
-        self.signUnit = 10
-        # addrCheckSumLen - default length of the address checksum
-        self.addrCheckSumLen = 4
+        # target_bits - we can change target bits due to control complexity of making new blocks
+        # self.target_bits = int(24)
+        self.target_bits = int(12)
+        # sign_unit - reward value for mining
+        self.sign_unit = 10
+        # addr_check_sum_len - default length of the address checksum
+        self.addr_check_sum_len = 4
         # version - target network is the mainnet, version = 0x00
         self.version = bytes(0x00)
 
-    def newWallet(self):
-        prKey, pubKey, pubKeyBytes = self.newKeyPair()
-        wallet = Wallet(prKey, pubKey, pubKeyBytes)
-        address = str(self.getAddress(wallet), 'utf-8')
+    def new_wallet(self):
+        pr_key, pub_key, pub_key_bytes = self.new_key_pair()
+        wallet = Wallet(pr_key, pub_key, pub_key_bytes)
+        address = str(self.get_address(wallet), 'utf-8')
         self.wallets[address] = wallet
         print('Your new address: ' + address)
         return address
 
-    def newKeyPair(self):
+    def new_key_pair(self):
         # generate a private key for curve P256
-        prKey = keys.gen_private_key(curve.P256)
+        pr_key = keys.gen_private_key(curve.P256)
         # get the public key corresponding to the private key we just generated
-        pubKey = keys.get_public_key(prKey, curve.P256)
+        pub_key = keys.get_public_key(pr_key, curve.P256)
         # public key to bytes
-        pubKeyBytes = pubKey.x.to_bytes(32, "big") + pubKey.y.to_bytes(32, "big")
-        return prKey, pubKey, pubKeyBytes
+        pub_key_bytes = pub_key.x.to_bytes(32, "big") + pub_key.y.to_bytes(32, "big")
+        return pr_key, pub_key, pub_key_bytes
 
-    def getAddress(self, wallet):
-        pubKeyHash = self.pubKeyHash(self.version + wallet.publicKeyBytes)
+    def get_address(self, wallet):
+        pub_key_hash = self.pub_key_hash(self.version + wallet.public_key_bytes)
         # first 4 bytes - checksum
-        checksum = hashlib.sha256(hashlib.sha256(pubKeyHash).digest()).digest()[:self.addrCheckSumLen]
-        address = b58encode(pubKeyHash + checksum)
+        checksum = hashlib.sha256(hashlib.sha256(pub_key_hash).digest()).digest()[:self.addr_check_sum_len]
+        address = b58encode(pub_key_hash + checksum)
         return address
 
-    # def isAddressValid(self, address):
-    #     pubKeyHash = b58decode(address)
+    # def is_address_valid(self, address):
+    #     pub_key_hash = b58decode(address)
     #     # pub key
-    #     pubKey = pubKeyHash[: len(pubKeyHash) - self.addrCheckSumLen]
+    #     pub_key = pub_key_hash[: len(pub_key_hash) - self.addr_check_sum_len]
     #     # check sum
-    #     checkSum = pubKeyHash[len(pubKeyHash) - self.addrCheckSumLen:]
+    #     check_sum = pub_key_hash[len(pub_key_hash) - self.addr_check_sum_len:]
     #     pass
 
-    def pubKeyHash(self, pubKeyBytes):
+    def pub_key_hash(self, pub_key_bytes):
         ripemd160 = hashlib.new('ripemd160')
-        ripemd160.update(hashlib.sha256(pubKeyBytes).digest())
+        ripemd160.update(hashlib.sha256(pub_key_bytes).digest())
         return ripemd160.digest()
 
-    def signTransaction(self, transaction, privateKey):
-        if self.isCoinBase(transaction):
+    def sign_transaction(self, transaction, private_key):
+        if self.is_coin_base(transaction):
             return
-        prevTransactions = {}
-        for vIn in transaction.vIn:
-            prevTransaction = self.findTransaction(vIn.id)
-            if prevTransaction == None:
+        prev_transactions = {}
+        for v_in in transaction.v_in:
+            prev_transaction = self.find_transaction(v_in.id)
+            if prev_transaction is None:
                 print('Failed to find previous transaction')
                 return
-            prevTransactions[prevTransaction.id] = prevTransaction
-        return self.sign(transaction, prevTransactions, privateKey)
+            prev_transactions[prev_transaction.id] = prev_transaction
+        return self.sign(transaction, prev_transactions, private_key)
 
-    def sign(self, transaction, prevTransactions, privateKey):
-        for vIn in transaction.vIn:
-            if not (vIn.id in prevTransactions and prevTransactions[vIn.id].id):
+    def sign(self, transaction, prev_transactions, private_key):
+        for v_in in transaction.v_in:
+            if not (v_in.id in prev_transactions and prev_transactions[v_in.id].id):
                 print('Previous transaction is not correct')
                 return
-        txTrimmedCopy = self.txTrimmedCopy(transaction)
-        for index, vIn in enumerate(txTrimmedCopy.vIn):
-            prevTransaction = prevTransactions[vIn.id]
-            vIn.sig = None
-            vIn.pubKeyBytes = prevTransaction.vOut[vIn.vOut].pubKeyHash
-            dataToSign = txTrimmedCopy.__repr__()
-            r, s = ecdsa.sign(dataToSign, privateKey)
-            transaction.vIn[index].sig = {'r': r, 's': s}
-            vIn.pubKey = None
+        tx_trimmed_copy = self.tx_trimmed_copy(transaction)
+        for index, v_in in enumerate(tx_trimmed_copy.v_in):
+            prev_transaction = prev_transactions[v_in.id]
+            v_in.sig = None
+            v_in.pub_key_bytes = prev_transaction.v_out[v_in.v_out].pub_key_hash
+            data_to_sign = tx_trimmed_copy.__repr__()
+            r, s = ecdsa.sign(data_to_sign, private_key)
+            transaction.v_in[index].sig = {'r': r, 's': s}
+            v_in.pub_key = None
         return transaction
 
-    def verifyTransaction(self, transaction):
-        if self.isCoinBase(transaction):
+    def verify_transaction(self, transaction):
+        if self.is_coin_base(transaction):
             return
-        prevTransactions = {}
-        for vIn in transaction.vIn:
-            prevTransaction = self.findTransaction(vIn.id)
-            if prevTransaction == None:
+        prev_transactions = {}
+        for v_in in transaction.v_in:
+            prev_transaction = self.find_transaction(v_in.id)
+            if prev_transaction is None:
                 print('Failed to find previous transaction')
                 return
-            prevTransactions[prevTransaction.id] = prevTransaction
-        return self.verify(transaction, prevTransactions)
+            prev_transactions[prev_transaction.id] = prev_transaction
+        return self.verify(transaction, prev_transactions)
 
-    def verify(self, transaction, prevTransactions):
-        for vIn in transaction.vIn:
-            if not (vIn.id in prevTransactions and prevTransactions[vIn.id].id):
+    def verify(self, transaction, prev_transactions):
+        for v_in in transaction.v_in:
+            if not (v_in.id in prev_transactions and prev_transactions[v_in.id].id):
                 print('Previous transaction is not correct')
                 return
-        txTrimmedCopy = self.txTrimmedCopy(transaction)
-        for index, vIn in enumerate(transaction.vIn):
-            prevTransaction = prevTransactions[vIn.id]
-            txTrimmedCopy.vIn[index].sig = None
-            txTrimmedCopy.vIn[index].pubKeyBytes = prevTransaction.vOut[vIn.vOut].pubKeyHash
-            if vIn.sig == None:
+        tx_trimmed_copy = self.tx_trimmed_copy(transaction)
+        for index, v_in in enumerate(transaction.v_in):
+            prev_transaction = prev_transactions[v_in.id]
+            tx_trimmed_copy.v_in[index].sig = None
+            tx_trimmed_copy.v_in[index].pub_key_bytes = prev_transaction.v_out[v_in.v_out].pub_key_hash
+            if v_in.sig is None:
                 return False
-            r, s = vIn.sig['r'], vIn.sig['s']
-            dataToVerify = txTrimmedCopy.__repr__()
-            verify = ecdsa.verify((r, s), dataToVerify, vIn.pubKey)
-            if verify == False:
+            r, s = v_in.sig['r'], v_in.sig['s']
+            data_to_verify = tx_trimmed_copy.__repr__()
+            verify = ecdsa.verify((r, s), data_to_verify, v_in.pub_key)
+            if verify is False:
                 return False
         return True
 
-    def txTrimmedCopy(self, transaction):
+    def tx_trimmed_copy(self, transaction):
         inputs = []
         outputs = []
-        for vIn in transaction.vIn:
-            inputs.append(TransactionInput(vIn.id, vIn.vOut, None, None, None))
-        for vOut in transaction.vOut:
-            outputs.append(TransactionOutput(vOut.val, vOut.pubKeyHash))
+        for v_in in transaction.v_in:
+            inputs.append(TransactionInput(v_in.id, v_in.v_out, None, None, None))
+        for v_out in transaction.v_out:
+            outputs.append(TransactionOutput(v_out.val, v_out.pub_key_hash))
         return Transaction(transaction.id, inputs, outputs)
 
-    def transactionHash(self, transaction):
-        allInOne = ''
-        for txIn in transaction.vIn:
-            allInOne += str(txIn.id) + str(txIn.vOut) + str(txIn.sig) + str(txIn.pubKey)
-        for txOut in transaction.vOut:
-            allInOne += str(txOut.val) + str(txOut.pubKeyHash)
-        txHash = hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
-        return txHash
+    def transaction_hash(self, transaction):
+        all_in_one = ''
+        for tx_in in transaction.v_in:
+            all_in_one += str(tx_in.id) + str(tx_in.v_out) + str(tx_in.sig) + str(tx_in.pub_key)
+        for tx_out in transaction.v_out:
+            all_in_one += str(tx_out.val) + str(tx_out.pub_key_hash)
+        tx_hash = hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
+        return tx_hash
 
-    def coinBaseTx(self, to, data):
-        tIn = TransactionInput(None, -1, None, data, data)
-        tOut = TransactionOutput(self.signUnit, None)
-        tOut.pubKeyHash = tOut.lock(to, self.version, self.addrCheckSumLen)
-        tr = Transaction(0, [tIn], [tOut])
-        tr.id = self.transactionHash(tr)
+    def coin_base_tx(self, to, data):
+        tx_in = TransactionInput(None, -1, None, data, data)
+        tx_out = TransactionOutput(self.sign_unit, None)
+        tx_out.pub_key_hash = tx_out.lock(to, self.version, self.addr_check_sum_len)
+        tr = Transaction(0, [tx_in], [tx_out])
+        tr.id = self.transaction_hash(tr)
         return tr
 
-    def isCoinBase(self, transaction):
-        return len(transaction.vIn) == 1 and transaction.vIn[0].id == None and transaction.vIn[0].vOut == -1
+    def is_coin_base(self, transaction):
+        return len(transaction.v_in) == 1 and transaction.v_in[0].id is None and transaction.v_in[0].v_out == -1
 
-    def unspentTxs(self, pubKeyHash):
-        unspentTxs = []
-        unlockingInputs = []
-        unspentValidTxs = []
+    def unspent_txs(self, pub_key_hash):
+        unspent_txs = []
+        unlocking_inputs = []
+        unspent_valid_txs = []
         blocks = models.Blocks.query.all()
-        if blocks == None:
+        if blocks is None:
             print("Blockchain is not initialized yet.")
             return
-        for serializedBlock in blocks:
-            block = self.deSerialize(serializedBlock.serializedBlock)
+        for serialized_block in blocks:
+            block = self.de_serialize(serialized_block.serializedBlock)
             for tx in block.transactions:
-                for index, vOut in enumerate(tx.vOut):
+                for index, v_out in enumerate(tx.v_out):
                     move = True
-                    for vIn in tx.vIn:
+                    for v_in in tx.v_in:
                         # if an input have any reference to the output -> tx was spent
-                        if (index == vIn.vOut) and (vIn.id == tx.id):
+                        if (index == v_in.v_out) and (v_in.id == tx.id):
                             move = False
                             break
-                    if move == False: continue
+                    if move is False: continue
                     # check if provided public key hash was used to lock the output
-                    if vOut.isLockedWithKey(pubKeyHash):
+                    if v_out.is_locked_with_key(pub_key_hash):
                         # set tx itself, index of the vOut and vOut itself
-                        unspentTxs.append([tx, index, vOut])
-                for vIn in tx.vIn:
-                    if vIn.vOut == -1: break  # first transaction
-                    if vIn.usesKey(self.pubKeyHash(vIn.pubKeyBytes), pubKeyHash):
-                        unlockingInputs.append(vIn)
+                        unspent_txs.append([tx, index, v_out])
+                for v_in in tx.v_in:
+                    if v_in.v_out == -1: break  # first transaction
+                    if v_in.uses_key(self.pub_key_hash(v_in.pub_key_bytes), pub_key_hash):
+                        unlocking_inputs.append(v_in)
         # we have unlocking inputs and unspent transactions -> get valid unspent transactions
-        if len(unlockingInputs) == 0:
-            unspentValidTxs = unspentTxs
+        if len(unlocking_inputs) == 0:
+            unspent_valid_txs = unspent_txs
         else:
-            for vOutput in unspentTxs:
-                for vInput in unlockingInputs:
+            for unspent_tx in unspent_txs:
+                for _ in unlocking_inputs:
                     equals = False
-                    for vInput in unlockingInputs:
-                        if (vInput.id == vOutput[0].id) and (vInput.vOut == vOutput[1]):
+                    for v_input in unlocking_inputs:
+                        if (v_input.id == unspent_tx[0].id) and (v_input.v_out == unspent_tx[1]):
                             equals = True
                             break
-                    if equals == False:
-                        unspentValidTxs.append(vOutput)
+                    if equals is False:
+                        unspent_valid_txs.append(unspent_tx)
                         break
-        return unspentValidTxs
+        return unspent_valid_txs
 
-    def accVerrify(self, pubKeyHash, amount):
-        unspentTxs = self.unspentTxs(pubKeyHash)
-        unspentAddressTxs = []
+    def acc_verify(self, pub_key_hash, amount):
+        unspent_txs = self.unspent_txs(pub_key_hash)
+        unspent_address_txs = []
         acc = 0
-        for tx in unspentTxs:
-            if tx[0].vOut[tx[1]].isLockedWithKey(pubKeyHash) and (acc < amount):
+        for tx in unspent_txs:
+            if tx[0].v_out[tx[1]].is_locked_with_key(pub_key_hash) and (acc < amount):
                 acc += tx[2].val
-                unspentAddressTxs.append(tx)
-                if (acc >= amount): break
-        return acc, unspentAddressTxs
+                unspent_address_txs.append(tx)
+                if acc >= amount: break
+        return acc, unspent_address_txs
 
-    def newTransaction(self, fr, to, amount):
+    def new_transaction(self, fr, to, amount):
         inputs = []
         outputs = []
 
-        fromWallet = self.wallets.get(fr, False)
-        if not fromWallet:
+        from_wallet = self.wallets.get(fr, False)
+        if not from_wallet:
             print("There is no such an address: " + fr)
             return
 
-        acc, unspentAddressTxs = self.accVerrify(self.pubKeyHash(fromWallet.publicKeyBytes), amount)
+        acc, unspent_address_txs = self.acc_verify(self.pub_key_hash(from_wallet.public_key_bytes), amount)
 
         if acc < amount:
             print('Not enough units...')
             return
 
-        for tx in unspentAddressTxs:
-            inputs.append(TransactionInput(tx[0].id, tx[1], None, fromWallet.publicKey, fromWallet.publicKeyBytes))
+        for tx in unspent_address_txs:
+            inputs.append(TransactionInput(tx[0].id, tx[1], None, from_wallet.public_key, from_wallet.public_key_bytes))
 
         output = TransactionOutput(amount, None)
-        output.pubKeyHash = output.lock(to, self.version, self.addrCheckSumLen)
+        output.pub_key_hash = output.lock(to, self.version, self.addr_check_sum_len)
         outputs.append(output)
 
         if acc > amount:
             output = TransactionOutput(acc - amount, None)
-            output.pubKeyHash = output.lock(fr, self.version, self.addrCheckSumLen)
+            output.pub_key_hash = output.lock(fr, self.version, self.addr_check_sum_len)
             outputs.append(output)
 
         # reward
-        output = TransactionOutput(self.signUnit, None)
-        output.pubKeyHash = output.lock(fr, self.version, self.addrCheckSumLen)
+        output = TransactionOutput(self.sign_unit, None)
+        output.pub_key_hash = output.lock(fr, self.version, self.addr_check_sum_len)
         outputs.append(output)
 
         tx = Transaction(None, inputs, outputs)
-        tx.id = self.transactionHash(tx)
-        tx = self.signTransaction(tx, fromWallet.privateKey)
+        tx.id = self.transaction_hash(tx)
+        tx = self.sign_transaction(tx, from_wallet.private_key)
         return tx
 
-    def findTransaction(self, id):
+    def find_transaction(self, id):
         blocks = models.Blocks.query.all()
-        if blocks == None:
+        if blocks is None:
             print("Blockchain is not initialized yet.")
             return None
-        for serializedBlock in blocks:
-            block = self.deSerialize(serializedBlock.serializedBlock)
+        for serialized_block in blocks:
+            block = self.de_serialize(serialized_block.serializedBlock)
             for tx in block.transactions:
                 if tx.id == id:
                     return tx
         return None
 
-    def proofOfWork(self, block):
+    def pow(self, block):
         # hash - 256 bits
         # target bits - 25 bits -> target instance that is smaller than the hash (not valid proof of work)
         # we need to calculate new hash(for new block) with (nonce + new block info) to be smaller than target instance
-        target = int(str(int(10 ** round((256 - self.targetBits) / 4))), 16)  # target bits -> target instance
-        maxInt64 = int(9223372036854775807)  # 64 bits (8 bytes). To prevent overflow
-        nonce = 0
-        allIdsTxsInOne = ''
+        target = int(str(int(10 ** round((256 - self.target_bits) / 4))), 16)  # target bits -> target instance
+        max_int64 = int(9223372036854775807)  # 64 bits (8 bytes). To prevent overflow
+        nonce, all_ids_txs_in_one, data_hash = 0, '', ''
         for tx in block.transactions:
-            allIdsTxsInOne += tx.id
-        txHash = hashlib.sha256(allIdsTxsInOne.encode('utf-8')).hexdigest()
-        while nonce < maxInt64:
-            allInOne = str(block.timeStamp) + str(txHash) + str(block.prevHash) + '{:x}'.format(int(nonce))
-            dataHash = hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
+            all_ids_txs_in_one += tx.id
+        tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
+        while nonce < max_int64:
+            all_in_one = str(block.time_stamp) + str(tx_hash) + str(block.prev_hash) + '{:x}'.format(int(nonce))
+            data_hash = hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
             # cmp
-            if ((int(dataHash, 16) > target) - (int(dataHash, 16) < target)) == -1:
+            if ((int(data_hash, 16) > target) - (int(data_hash, 16) < target)) == -1:
                 break
             else:
                 nonce += 1
-        return dataHash, nonce
+        return data_hash, nonce
 
-    def testPoW(self, data, nonceToCheck=None):
-        target = int(str(int(10 ** round((256 - self.targetBits) / 4))), 16)  # target bits -> target instance
-        maxInt64 = int(9223372036854775807)  # 64 bits (8 bytes). To prevent overflow
+    def test_pow(self, data, nonceToCheck=None):
+        target = int(str(int(10 ** round((256 - self.target_bits) / 4))), 16)  # target bits -> target instance
+        max_int64 = int(9223372036854775807)  # 64 bits (8 bytes). To prevent overflow
         nonce = 0
-        origHash = hashlib.sha256(
-            (data + '{:x}'.format(int(nonceToCheck)) if nonceToCheck != None else "").encode('utf-8')).hexdigest()
-        while nonce < maxInt64:
-            allInOne = data + '{:x}'.format(int(nonce)) if nonce != 0 else ""
-            dataHash = hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
+        orig_hash = hashlib.sha256(
+            (data + '{:x}'.format(int(nonceToCheck)) if nonceToCheck is not None else "").encode('utf-8')).hexdigest()
+        data_hash = ''
+        while nonce < max_int64:
+            all_in_one = data + '{:x}'.format(int(nonce)) if nonce != 0 else ""
+            data_hash = hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
             # cmp
-            if ((int(dataHash, 16) > target) - (int(dataHash, 16) < target)) == -1:
+            if ((int(data_hash, 16) > target) - (int(data_hash, 16) < target)) == -1:
                 break
             else:
                 nonce += 1
-        print("Original hash: {}, Hash with nonce: {}, Nonce: {}, Nonce(hex): {}".format(origHash, dataHash, nonce,
+        print("Original hash: {}, Hash with nonce: {}, Nonce: {}, Nonce(hex): {}".format(orig_hash, data_hash, nonce,
                                                                                          '{:x}'.format(int(nonce))))
 
     # check if proof of work is valid for a single block
-    def checkBlockPoW(self, block):
-        target = int(str(int(10 ** round((256 - self.targetBits) / 4))), 16)
-        allInOne = str(block.timeStamp) + str(block.data) + str(block.prevHash) + '{:x}'.format(int(block.nonce))
-        dataHash = hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
-        return ((int(dataHash, 16) > target) - (int(dataHash, 16) < target)) == -1
-
-    def checkPoW(self):
-        for block in self.blocks:
-            print('Data: ' + block.data)
-            print('Hash: ' + block.hash)
-            print('Pr.hash: ' + block.prevHash)
-            print('Proof of work: ' + 'valid' if self.blockPoWCheck(
-                Block(block.timeStamp, block.data, block.prevHash, block.hash, block.nonce)) else 'invalid')
-            print('\n')
-
-    def newBlock(self, transactions, prevHash):
-        block = Block(datetime.now(), transactions, prevHash, '', '')
-        block.hash, block.nonce = self.proofOfWork(block)
-        return block
-
-    def setHash(self, block):
-        allIdsTxsInOne = ''
+    def check_block_pow(self, block):
+        all_ids_txs_in_one = ''
         for tx in block.transactions:
-            allIdsTxsInOne += tx.id
-        txHash = hashlib.sha256(allIdsTxsInOne.encode('utf-8')).hexdigest()
-        allInOne = str(block.timeStamp) + str(txHash) + str(block.prevHash) + '{:x}'.format(int(block.nonce))
-        return hashlib.sha256(allInOne.encode('utf-8')).hexdigest()
+            all_ids_txs_in_one += tx.id
+        tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
+        all_in_one = str(block.block.time_stamp) + str(tx_hash) + str(block.block.prev_hash) + '{:x}'.format(int(block.nonce))
+        target = int(str(int(10 ** round((256 - self.target_bits) / 4))), 16)
+        data_hash = hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
+        return ((int(data_hash, 16) > target) - (int(data_hash, 16) < target)) == -1
 
-    def addBlock(self, transactions):
-        print('Mining the block...')
-        for tx in transactions:
-            if self.verifyTransaction(tx) == False:
-                print('Invalid transaction')
-                return False
-        # prevBlock = self.blocks[len(self.blocks) - 1]
-        lastBlock = models.LastBlock.query.first()
-        prevBlock = models.Blocks.query.filter_by(hash=lastBlock.hash).first()
-        if prevBlock == None:
+    def check_pow(self):
+        blocks = models.Blocks.query.all()
+        if blocks is None:
             print("Blockchain is not initialized yet.")
             return
-        prevBlock = self.deSerialize(prevBlock.serializedBlock)
-        newBlock = self.newBlock(
+        for serialized_block in blocks:
+            block = self.de_serialize(serialized_block.serializedBlock)
+            print('Proof of work: ' + 'valid' if self.check_block_pow(block) else 'invalid')
+            print('\n')
+
+    def new_block(self, transactions, prev_hash):
+        block = Block(datetime.now(), transactions, prev_hash, '', '')
+        block.hash, block.nonce = self.pow(block)
+        return block
+
+    def set_hash(self, block):
+        all_ids_txs_in_one = ''
+        for tx in block.transactions:
+            all_ids_txs_in_one += tx.id
+        tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
+        all_in_one = str(block.time_stamp) + str(tx_hash) + str(block.prev_hash) + '{:x}'.format(int(block.nonce))
+        return hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
+
+    def add_block(self, transactions):
+        print('Mining the block...')
+        for tx in transactions:
+            if self.verify_transaction(tx) is False:
+                print('Invalid transaction')
+                return False
+        # prev_block = self.blocks[len(self.blocks) - 1]
+        last_block = models.LastBlock.query.first()
+        prev_block = models.Blocks.query.filter_by(hash=last_block.hash).first()
+        if prev_block is None:
+            print("Blockchain is not initialized yet.")
+            return
+        prev_block = self.de_serialize(prev_block.serializedBlock)
+        new_block = self.new_block(
             transactions,
-            self.setHash(
+            self.set_hash(
                 Block(
-                    prevBlock.timeStamp,
-                    prevBlock.transactions,
-                    prevBlock.prevHash,
-                    prevBlock.hash,
-                    prevBlock.nonce
+                    prev_block.time_stamp,
+                    prev_block.transactions,
+                    prev_block.prev_hash,
+                    prev_block.hash,
+                    prev_block.nonce
                 )
             )
         )
-        serializedBlock = self.serialize(newBlock)
-        # deSerializedBlock = self.deSerialize(serializedBlock)
-        dbBlock = models.Blocks(hash=newBlock.hash, serializedBlock=serializedBlock)
-        db.session.add(dbBlock)
-        dbLastBlock = models.LastBlock.query.first()
-        if dbLastBlock == None:
-            dbLastBlock = models.LastBlock(hash=newBlock.hash)
-            db.session.add(dbLastBlock)
+        serialized_block = self.serialize(new_block)
+        # de_serialized_block = self.deSerialize(serialized_block)
+        db_block = models.Blocks(hash=new_block.hash, serializedBlock=serialized_block)
+        db.session.add(db_block)
+        db_last_block = models.LastBlock.query.first()
+        if db_last_block is None:
+            db_last_block = models.LastBlock(hash=new_block.hash)
+            db.session.add(db_last_block)
         else:
-            dbLastBlock.hash = newBlock.hash
+            db_last_block.hash = new_block.hash
         db.session.commit()
         # self.blocks.append(newBlock)
         return True
 
     def send(self, fr, to, amount):
         print('Sending data=' + str(amount) + ' from ' + fr + ' to ' + to)
-        transaction = self.newTransaction(fr, to, amount)
+        transaction = self.new_transaction(fr, to, amount)
         if transaction:
-            blockIsAdded = self.addBlock([transaction])
-            if blockIsAdded:
+            block_is_added = self.add_block([transaction])
+            if block_is_added:
                 print('Success.')
             else:
                 print('Error.')
 
-    def getBalance(self, address):
+    def get_balance(self, address):
         wallet = self.wallets.get(address, False)
         if not wallet:
             print("There is no such an address: " + address)
             return
         balance = 0
-        for tx in self.unspentTxs(self.pubKeyHash(wallet.publicKeyBytes)):
+        for tx in self.unspent_txs(self.pub_key_hash(wallet.public_key_bytes)):
             balance += int(tx[2].val)
         print('Balance of ' + address + ': ' + str(balance))
 
-    def showBlocks(self):
+    def show_blocks(self):
         print('All blocks:')
         print('\n')
         blocks = models.Blocks.query.all()
-        if blocks == None:
+        if blocks is None:
             print("Blockchain is not initialized yet.")
             return None
-        for index, serializedBlock in enumerate(blocks):
-            block = self.deSerialize(serializedBlock.serializedBlock)
+        for index, serialized_block in enumerate(blocks):
+            block = self.de_serialize(serialized_block.serializedBlock)
             print('Block Id: ' + str(index))
             print('Hash: ' + block.hash)
             print('Nonce: ' + str(block.nonce))
-            print('Pr.hash: %s' % (block.prevHash if block.prevHash else 'none'))
-            print('Time: ' + str(block.timeStamp))
+            print('Pr.hash: %s' % (block.prev_hash if block.prev_hash else 'none'))
+            print('Time: ' + str(block.time_stamp))
             print('Transactions(count): ' + str(len(block.transactions)))
-            for index, transaction in enumerate(block.transactions):
-                print(' - Transaction ' + str(index + 1) + '(coin base transaction)' if self.isCoinBase(
+            for tx_index, transaction in enumerate(block.transactions):
+                print(' - Transaction ' + str(tx_index + 1) + '(coin base transaction)' if self.is_coin_base(
                     transaction) else '')
                 print(' - Transaction id:' + str(transaction.id))
-                print(' - Inputs (count):' + str(len(transaction.vIn)))
-                print(' - Outputs (count):' + str(len(transaction.vOut)))
+                print(' - Inputs (count):' + str(len(transaction.v_in)))
+                print(' - Outputs (count):' + str(len(transaction.v_out)))
                 print(' ---')
-                for vInIndex, vIn in enumerate(transaction.vIn):
-                    print(' -> Input ' + str(vInIndex))
-                    print(' -> Input id:' + str(vIn.id))
-                    print(' -> Input sig:' + str(vIn.sig))
-                    print(' -> Relative id of output:' + str(vIn.vOut))
-                    if not self.isCoinBase(transaction):
-                        print(' -> Input pub key (elliptic curve):' + 'X: {}, Y: {}'.format(str(vIn.pubKey.x),
-                                                                                            str(vIn.pubKey.y)))
-                        print(' -> Input pub key(bytes):' + str(vIn.pubKeyBytes))
+                for v_in_index, v_in in enumerate(transaction.v_in):
+                    print(' -> Input ' + str(v_in_index))
+                    print(' -> Input id:' + str(v_in.id))
+                    print(' -> Input sig:' + str(v_in.sig))
+                    print(' -> Relative id of output:' + str(v_in.v_out))
+                    if not self.is_coin_base(transaction):
+                        print(' -> Input pub key (elliptic curve):' + 'X: {}, Y: {}'.format(str(v_in.pub_key.x),
+                                                                                            str(v_in.pub_key.y)))
+                        print(' -> Input pub key(bytes):' + str(v_in.pub_key_bytes))
                     print(' ---')
-                for vOutIndex, vOut in enumerate(transaction.vOut):
-                    print(' -> Output ' + str(vOutIndex))
-                    print(' -> Output value:' + str(vOut.val))
-                    print(' -> Output public key(bytes):' + str(vOut.pubKeyHash))
+                for v_out_index, v_out in enumerate(transaction.v_out):
+                    print(' -> Output ' + str(v_out_index))
+                    print(' -> Output value:' + str(v_out.val))
+                    print(' -> Output public key(bytes):' + str(v_out.pub_key_hash))
             print('\n')
 
-    def initSystem(self, to):
-        dbBlock = models.Blocks.query.first()
-        if dbBlock != None:
+    def init_system(self, to):
+        db_block = models.Blocks.query.first()
+        if db_block is not None:
             print("Blockchain system is already initialized.")
         else:
             print('Mining the Genesis Block with data "Genesis Block"...')
-            transactions = [self.coinBaseTx(to, "Genesis block")]
-            genesisBlock = self.newBlock(transactions, '')
-            serializedGenesisBlock = self.serialize(genesisBlock)
-            dbBlock = models.Blocks(hash=genesisBlock.hash, serializedBlock=serializedGenesisBlock)
-            db.session.add(dbBlock)
-            dbLastBlock = models.LastBlock(hash=genesisBlock.hash)
-            db.session.add(dbLastBlock)
+            transactions = [self.coin_base_tx(to, "Genesis block")]
+            genesis_block = self.new_block(transactions, '')
+            serialized_genesis_block = self.serialize(genesis_block)
+            db_block = models.Blocks(hash=genesis_block.hash, serializedBlock=serialized_genesis_block)
+            db.session.add(db_block)
+            db_last_block = models.LastBlock(hash=genesis_block.hash)
+            db.session.add(db_last_block)
             db.session.commit()
             # self.blocks.append(self.newBlock(transactions, ''))
-            print('Sucess.')
+            print('Success.')
 
-    def isSerializedCoinbaseTx(self, jsonTx):
-        return len(jsonTx["vIn"]) == 1 and json.loads(jsonTx["vIn"][0])["id"] == None and json.loads(jsonTx["vIn"][0])["vOut"] == -1
+    def is_serialized_soinbase_tx(self, jsonTx):
+        return len(jsonTx["vIn"]) == 1 and json.loads(jsonTx["vIn"][0])["id"] is None and json.loads(jsonTx["vIn"][0])[
+            "vOut"] == -1
 
     def serialize(self, block):
-        jsonBlock = {
-            "timeStamp": block.timeStamp.isoformat(),
+        json_block = {
+            "timeStamp": block.time_stamp.isoformat(),
             "transactions": [],
-            "prevHash": block.prevHash,
+            "prevHash": block.prev_hash,
             "hash": block.hash,
             "nonce": block.nonce
         }
         for tx in block.transactions:
-            jsonTx = {
+            json_tx = {
                 "id": tx.id,
                 "vIn": [],
                 "vOut": []
             }
-            for vIn in tx.vIn:
-                jsonVin = {
-                    "id": vIn.id,
-                    "vOut": vIn.vOut,
-                    "sig": (DEREncoder.encode_signature(vIn.sig["r"], vIn.sig["s"])).decode("latin1") if not self.isCoinBase(tx) else None,
-                    "pubKey": PEMEncoder.encode_public_key(vIn.pubKey) if not self.isCoinBase(tx) else vIn.pubKey,
-                    "pubKeyBytes": (vIn.pubKeyBytes).decode("latin1") if not self.isCoinBase(tx) else vIn.pubKeyBytes
+            for v_in in tx.v_in:
+                json_vin = {
+                    "id": v_in.id,
+                    "vOut": v_in.v_out,
+                    "sig": (DEREncoder.encode_signature(v_in.sig["r"], v_in.sig["s"])).decode(
+                        "latin1") if not self.is_coin_base(tx) else None,
+                    "pubKey": PEMEncoder.encode_public_key(v_in.pub_key) if not self.is_coin_base(tx) else v_in.pub_key,
+                    "pubKeyBytes": (v_in.pub_key_bytes).decode("latin1") if not self.is_coin_base(
+                        tx) else v_in.pub_key_bytes
                 }
-                jsonTx["vIn"].append(json.dumps(jsonVin))
-            for vOut in tx.vOut:
-                jsonvOut = {
-                    "val": vOut.val,
-                    "pubKeyHash": (vOut.pubKeyHash).decode("latin1")
+                json_tx["vIn"].append(json.dumps(json_vin))
+            for v_out in tx.v_out:
+                jsonv_out = {
+                    "val": v_out.val,
+                    "pubKeyHash": (v_out.pub_key_hash).decode("latin1")
                 }
-                jsonTx["vOut"].append(json.dumps(jsonvOut))
-            jsonBlock["transactions"].append(json.dumps(jsonTx))
-        jsonData = json.dumps(jsonBlock)
-        return jsonData
+                json_tx["vOut"].append(json.dumps(jsonv_out))
+            json_block["transactions"].append(json.dumps(json_tx))
+        json_data = json.dumps(json_block)
+        return json_data
 
-    def deSerialize(self, jsonData):
-        jsonBlock = json.loads(jsonData)
-        blockTx = []
-        for tx in jsonBlock["transactions"]:
-            jsonTx = json.loads(tx)
-            blockVin = []
-            for vIn in jsonTx["vIn"]:
-                jsonVin = json.loads(vIn)
-                sig = DEREncoder.decode_signature(jsonVin["sig"].encode("latin1")) if jsonVin["sig"] != None else None
-                blockVin.append(
+    def de_serialize(self, json_data):
+        json_block = json.loads(json_data)
+        block_tx = []
+        for tx in json_block["transactions"]:
+            json_tx = json.loads(tx)
+            block_vin = []
+            for vIn in json_tx["vIn"]:
+                json_vin = json.loads(vIn)
+                sig = DEREncoder.decode_signature(json_vin["sig"].encode("latin1")) if json_vin["sig"] is not None else None
+                block_vin.append(
                     TransactionInput(
-                        jsonVin["id"],
-                        jsonVin["vOut"],
-                        {'r': sig[0], 's': sig[1]} if not self.isSerializedCoinbaseTx(jsonTx) else sig,
-                        PEMEncoder.decode_public_key(jsonVin["pubKey"], curve=curve.P256) if not self.isSerializedCoinbaseTx(jsonTx) else jsonVin["pubKey"],
-                        jsonVin["pubKeyBytes"].encode("latin1") if not self.isSerializedCoinbaseTx(jsonTx) else jsonVin["pubKeyBytes"]
+                        json_vin["id"],
+                        json_vin["vOut"],
+                        {'r': sig[0], 's': sig[1]} if not self.is_serialized_soinbase_tx(json_tx) else sig,
+                        PEMEncoder.decode_public_key(json_vin["pubKey"],
+                                                     curve=curve.P256) if not self.is_serialized_soinbase_tx(json_tx) else
+                        json_vin["pubKey"],
+                        json_vin["pubKeyBytes"].encode("latin1") if not self.is_serialized_soinbase_tx(json_tx) else json_vin[
+                            "pubKeyBytes"]
                     )
                 )
-            blockVout = []
-            for vOut in jsonTx["vOut"]:
-                jsonVout = json.loads(vOut)
-                blockVout.append(
+            block_vout = []
+            for v_out in json_tx["vOut"]:
+                json_vout = json.loads(v_out)
+                block_vout.append(
                     TransactionOutput(
-                        jsonVout["val"],
-                        jsonVout["pubKeyHash"].encode("latin1")
+                        json_vout["val"],
+                        json_vout["pubKeyHash"].encode("latin1")
                     )
                 )
-            blockTx.append(
+            block_tx.append(
                 Transaction(
-                    jsonTx["id"],
-                    blockVin,
-                    blockVout
+                    json_tx["id"],
+                    block_vin,
+                    block_vout
                 )
             )
         block = Block(
-            datetime.fromisoformat(jsonBlock["timeStamp"]),
-            blockTx,
-            jsonBlock["prevHash"],
-            jsonBlock["hash"],
-            jsonBlock["nonce"]
+            datetime.fromisoformat(json_block["timeStamp"]),
+            block_tx,
+            json_block["prevHash"],
+            json_block["hash"],
+            json_block["nonce"]
         )
         return block
 
@@ -589,8 +597,8 @@ class BlockChain(Chain):
     def __init__(self):
         super(BlockChain, self).__init__()
         print('BlockChain instance is created.')
-        dbBlock = models.Blocks.query.first()
-        if dbBlock != None:
+        db_block = models.Blocks.query.first()
+        if db_block is not None:
             print("Blockchain system is already initialized.")
         else:
             print('Blockchain is not initialized yet.')
@@ -603,40 +611,40 @@ bc = BlockChain()
 print('\n')
 # Eugene
 print('Create wallet for Eugene:')
-addressEugene = bc.newWallet()
+addressEugene = bc.new_wallet()
 # bc.testPoW("Data")
 # Ivan
 print('Create wallet for Ivan:')
-addressIvan = bc.newWallet()
+addressIvan = bc.new_wallet()
 # Alena
 print('Create wallet for Alena:')
-addressAlena = bc.newWallet()
+addressAlena = bc.new_wallet()
 print('\n')
 print('Init blockchain by Eugene ({}):'.format(addressEugene))
-bc.initSystem(addressEugene)
-bc.getBalance(addressEugene)
+bc.init_system(addressEugene)
+bc.get_balance(addressEugene)
 print('\n')
 print('Sending data from Eugene({}) to Ivan({}):'.format(addressEugene, addressIvan))
 bc.send(addressEugene, addressIvan, 4)
-bc.getBalance(addressEugene)
-bc.getBalance(addressIvan)
+bc.get_balance(addressEugene)
+bc.get_balance(addressIvan)
 print('\n')
 print('Sending data from Ivan({}) to Alena({}):'.format(addressIvan, addressAlena))
 bc.send(addressIvan, addressAlena, 2)
-bc.getBalance(addressIvan)
-bc.getBalance(addressAlena)
+bc.get_balance(addressIvan)
+bc.get_balance(addressAlena)
 print('\n')
 print('Sending data from Ivan({}) to Eugene({}):'.format(addressIvan, addressEugene))
 bc.send(addressIvan, addressEugene, 4)
 print('\n')
 print('Sending data from Eugene({}) to Alena({}):'.format(addressEugene, addressAlena))
 bc.send(addressEugene, addressAlena, 1)
-bc.getBalance(addressEugene)
-bc.getBalance(addressAlena)
+bc.get_balance(addressEugene)
+bc.get_balance(addressAlena)
 print('\n')
 print('Balance of all members:')
-bc.getBalance(addressEugene)
-bc.getBalance(addressIvan)
-bc.getBalance(addressAlena)
+bc.get_balance(addressEugene)
+bc.get_balance(addressIvan)
+bc.get_balance(addressAlena)
 print('\n')
-bc.showBlocks()
+bc.show_blocks()
