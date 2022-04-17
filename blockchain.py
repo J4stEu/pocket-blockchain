@@ -18,10 +18,12 @@ class Wallet(object):
 
 
 class Transaction(object):
-    def __init__(self, id, inputs, outputs):
+    def __init__(self, id, inputs, outputs, created, included_in_block=None):
         self.id = id
         self.inputs = inputs
         self.outputs = outputs
+        self.created = created
+        self.included_in_block = included_in_block
 
     def __repr__(self):
         inputs_representation = []
@@ -30,7 +32,9 @@ class Transaction(object):
         outputs_representation = []
         for v_out in self.outputs:
             outputs_representation.append(v_out.__repr__)
-        return "Transaction: id = {}, inputs = {}, outputs = {}".format(self.id, inputs_representation, outputs_representation)
+        return "Transaction: id = {}, inputs = {}, outputs = {}, created = {}".format(self.id, inputs_representation,
+                                                                                      outputs_representation,
+                                                                                      self.created)
 
 
 class TransactionInput(object):
@@ -97,28 +101,28 @@ class MerkleTree(object):
         if len(secondary) == 1:
             return secondary[0]
         else:
-            self.find_merkle_hash(secondary)
-        pass
+            return self.find_merkle_hash(secondary)
+
 
 class ChainState(object):
-    def __init__(self):
-        self.unspent_tx_outputs = []
 
-    def get_utxo(self):
+    def get_utxo(self, de_serialize=True):
         serialized_unspent_tx_outputs = models.UTXO.query.all()
-        return self.de_serialize_unspent_tx_outputs(serialized_unspent_tx_outputs)
+        if de_serialize:
+            return self.de_serialize_unspent_tx_outputs(serialized_unspent_tx_outputs)
+        return serialized_unspent_tx_outputs
 
     def store_utxo(self, unspent_tx_outputs):
         # delete old cache
         db.session.query(models.UTXO).delete()
         db.session.commit()
+        # set new cache
         serialized_unspent_tx_outputs = self.serialize_unspent_tx_outputs(unspent_tx_outputs)
         utxo = []
         for key, serialized_output in serialized_unspent_tx_outputs.items():
             utxo.append(models.UTXO(txID=key, serializedUnspentOutputs=json.dumps(serialized_output)))
         db.session.add_all(utxo)
         db.session.commit()
-
 
     def update_utxo(self, transaction):
         utxo = self.get_utxo()
@@ -207,7 +211,6 @@ class ChainState(object):
 
     def reindex(self, serialized_blocks, de_serialize):
         unspent_tx_outputs = self.reindex_utxo(serialized_blocks, de_serialize)
-        self.unspent_tx_outputs = unspent_tx_outputs
         self.store_utxo(unspent_tx_outputs)
 
     def serialize_unspent_tx_outputs(self, unspent_tx_outputs):
@@ -257,6 +260,7 @@ class ChainState(object):
                     )
         return unspent_tx_outputs
 
+
 class Chain(object):
     def __init__(self):
         # wallets store location
@@ -265,9 +269,9 @@ class Chain(object):
         # self.target_bits = int(24)
         self.target_bits = int(12)
         # sign_unit - reward value for mining
-        self.sign_unit = 10
+        self.sign_unit = int(10)
         # addr_check_sum_len - default length of the address checksum
-        self.addr_check_sum_len = 4
+        self.addr_check_sum_len = int(4)
         # version - target network is the mainnet, version = 0x00
         self.version = bytes(0x00)
         # unspent transaction outputs - cache
@@ -278,25 +282,32 @@ class Chain(object):
         pr_key, pub_key, pub_key_bytes = self.new_key_pair()
         wallet = Wallet(pr_key, pub_key, pub_key_bytes)
         address = str(self.get_address(wallet), 'utf-8')
-        self.save_wallet(wallet, address)
+        save_wallet = self.save_wallet(wallet, address)
+        if not save_wallet:
+            print("Failed to save wallet...")
+            return None
         print('Your new address: ' + address)
         return address
 
     def save_wallet(self, wallet, address):
         wallets_bcw = os.path.isfile(self.wallets_store)
-        if wallets_bcw:
-            with open(self.wallets_store, 'r') as f:
-                serialized_wallets = json.load(f)
-            wallets = self.de_serialize_wallets(serialized_wallets)
-            wallets[address] = wallet
-            new_serialized_wallets = self.serialize_wallets(wallets)
-            with open(self.wallets_store, 'w') as f:
-                json.dump(new_serialized_wallets, f)
-        else:
-            wallets = {address: wallet}
-            new_serialized_wallets = self.serialize_wallets(wallets)
-            with open(self.wallets_store, 'w') as f:
-                json.dump(new_serialized_wallets, f)
+        try:
+            if wallets_bcw:
+                with open(self.wallets_store, 'r') as f:
+                    serialized_wallets = json.load(f)
+                wallets = self.de_serialize_wallets(serialized_wallets)
+                wallets[address] = wallet
+                new_serialized_wallets = self.serialize_wallets(wallets)
+                with open(self.wallets_store, 'w') as f:
+                    json.dump(new_serialized_wallets, f)
+            else:
+                wallets = {address: wallet}
+                new_serialized_wallets = self.serialize_wallets(wallets)
+                with open(self.wallets_store, 'w') as f:
+                    json.dump(new_serialized_wallets, f)
+            return True
+        except:
+            return False
 
     def serialize_wallet(self, wallet):
         return {
@@ -328,11 +339,10 @@ class Chain(object):
     def get_wallets(self):
         wallets_bcw = os.path.isfile(self.wallets_store)
         if not wallets_bcw:
-            print("There is no any wallets.")
-            return None
+            return None, "There is no any wallets."
         with open(self.wallets_store, 'r') as f:
             serialized_wallets = json.load(f)
-        return self.de_serialize_wallets(serialized_wallets)
+        return self.de_serialize_wallets(serialized_wallets), ""
 
     def new_key_pair(self):
         # generate a private key for curve P256
@@ -365,21 +375,19 @@ class Chain(object):
 
     def sign_transaction(self, transaction, private_key):
         if self.is_coin_base(transaction):
-            return
+            return None, "Transaction is coinbase."
         prev_transactions = {}
         for input in transaction.inputs:
             prev_transaction = self.find_transaction(input.id)
             if prev_transaction is None:
-                print('Failed to find previous transaction')
-                return
+                return None, "Failed to find previous transaction"
             prev_transactions[prev_transaction.id] = prev_transaction
         return self.sign(transaction, prev_transactions, private_key)
 
     def sign(self, transaction, prev_transactions, private_key):
         for input in transaction.inputs:
             if not (input.id in prev_transactions and prev_transactions[input.id].id):
-                print('Previous transaction is not correct')
-                return
+                return None, "Previous transaction is not correct"
         tx_trimmed_copy = self.tx_trimmed_copy(transaction)
         for index, input in enumerate(tx_trimmed_copy.inputs):
             prev_transaction = prev_transactions[input.id]
@@ -389,17 +397,17 @@ class Chain(object):
             r, s = ecdsa.sign(data_to_sign, private_key)
             transaction.inputs[index].sig = {'r': r, 's': s}
             input.public_key = None
-        return transaction
+        return transaction, ""
 
     def verify_transaction(self, transaction):
         if self.is_coin_base(transaction):
-            return
+            return False
         prev_transactions = {}
         for input in transaction.inputs:
             prev_transaction = self.find_transaction(input.id)
             if prev_transaction is None:
                 print('Failed to find previous transaction')
-                return
+                return False
             prev_transactions[prev_transaction.id] = prev_transaction
         return self.verify(transaction, prev_transactions)
 
@@ -407,7 +415,7 @@ class Chain(object):
         for input in transaction.inputs:
             if not (input.id in prev_transactions and prev_transactions[input.id].id):
                 print('Previous transaction is not correct')
-                return
+                return False
         tx_trimmed_copy = self.tx_trimmed_copy(transaction)
         for index, input in enumerate(transaction.inputs):
             prev_transaction = prev_transactions[input.id]
@@ -429,22 +437,22 @@ class Chain(object):
             inputs.append(TransactionInput(input.id, input.output, None, None, None))
         for output in transaction.outputs:
             outputs.append(TransactionOutput(output.val, output.public_key_hash))
-        return Transaction(transaction.id, inputs, outputs)
+        return Transaction(transaction.id, inputs, outputs, transaction.created)
 
     def transaction_hash(self, transaction):
-        all_in_one = ''
-        for tx_input in transaction.inputs:
-            all_in_one += str(tx_input.id) + str(tx_input.output) + str(tx_input.sig) + str(tx_input.public_key)
-        for tx_output in transaction.outputs:
-            all_in_one += str(tx_output.val) + str(tx_output.public_key_hash)
-        tx_hash = hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
+        # all_in_one = ''
+        # for tx_input in transaction.inputs:
+        #     all_in_one += str(tx_input.id) + str(tx_input.output) + str(tx_input.sig) + str(tx_input.public_key)
+        # for tx_output in transaction.outputs:
+        #     all_in_one += str(tx_output.val) + str(tx_output.public_key_hash)
+        tx_hash = hashlib.sha256(transaction.__repr__().encode('utf-8')).hexdigest()
         return tx_hash
 
     def coin_base_tx(self, to, data):
         tx_input = TransactionInput(0, -1, None, data, data)
         tx_output = TransactionOutput(self.sign_unit, None)
         tx_output.public_key_hash = tx_output.lock(to, self.version, self.addr_check_sum_len)
-        tr = Transaction(0, [tx_input], [tx_output])
+        tr = Transaction(0, [tx_input], [tx_output], datetime.now())
         tr.id = self.transaction_hash(tr)
         return tr
 
@@ -517,16 +525,20 @@ class Chain(object):
         inputs = []
         outputs = []
 
-        from_wallet = self.get_wallets().get(fr, False)
+        wallets, error = self.get_wallets()
+        if wallets is None and error != "":
+            return None, error
+
+        from_wallet = wallets.get(fr, False)
         if not from_wallet:
-            print("There is no such an address: " + fr)
-            return
+            # print("There is no such an address: " + fr)
+            return None, "There is no such an address: " + fr
 
         acc, address_txs_to_spend = self.acc_verify(self.pub_key_hash(from_wallet.public_key_bytes), amount)
 
         if acc < amount:
-            print('Not enough units...')
-            return
+            # print('Not enough units...')
+            return None, "Not enough units..."
 
         for tx in address_txs_to_spend:
             inputs.append(TransactionInput(tx[0], tx[1], None, from_wallet.public_key, from_wallet.public_key_bytes))
@@ -541,29 +553,62 @@ class Chain(object):
             outputs.append(output)
 
         # reward
+        # if is_last:
+        #     print("Reward to {} for mining the block: {}".format(fr, str(self.sign_unit)))
+        #     output = TransactionOutput(self.sign_unit, None)
+        #     output.public_key_hash = output.lock(fr, self.version, self.addr_check_sum_len)
+        #     outputs.append(output)
+
+        tx = Transaction(None, inputs, outputs, datetime.now())
+        tx.id = self.transaction_hash(tx)
+        tx, error = self.sign_transaction(tx, from_wallet.private_key)
+        if tx is None and error != "":
+            return None, error
+        return tx, ""
+
+    def reward_transaction(self, to):
+        wallets, error = self.get_wallets()
+        if wallets is None and error != "":
+            return None, error
+        from_wallet = wallets.get(to, False)
+        if not from_wallet:
+            # print("There is no such an address: " + fr)
+            return None, "There is no such an address: " + to
+        inputs = []
+        outputs = []
         print("Reward to {} for mining the block: {}".format(to, str(self.sign_unit)))
         output = TransactionOutput(self.sign_unit, None)
-        output.public_key_hash = output.lock(fr, self.version, self.addr_check_sum_len)
+        output.public_key_hash = output.lock(to, self.version, self.addr_check_sum_len)
         outputs.append(output)
-
-        tx = Transaction(None, inputs, outputs)
+        tx = Transaction(None, inputs, outputs, datetime.now())
         tx.id = self.transaction_hash(tx)
-        tx = self.sign_transaction(tx, from_wallet.private_key)
-        return tx
+        tx, error = self.sign_transaction(tx, from_wallet.private_key)
+        if tx is None and error != "":
+            return None, error
+        return tx, ""
 
     def find_transaction(self, id):
         blocks = self.get_blocks()
         if blocks is None:
             return None
         for serialized_block in blocks:
-            block = self.de_serialize(serialized_block.serializedBlock)
+            block = self.de_serialize_block(serialized_block.serializedBlock)
             for tx in block.transactions:
                 if tx.id == id:
                     return tx
         return None
 
+    def get_from_pool(self, fr):
+        pined_transactions = models.TXPool.query.filter(models.TXPool.fromAddr == fr).all()
+        if len(pined_transactions) > 0:
+            return None, "Your wallet is locked due to awaiting for previous transaction confirmation."
+        return pined_transactions, ""
+
+    def get_all_pool(self):
+        return models.TXPool.query.all()
+
     def pow(self, block):
-        # hash - 256 bits
+        # zhash - 256 bits
         # target bits - 25 bits -> target instance that is smaller than the hash (not valid proof of work)
         # we need to calculate new hash(for new block) with (nonce + new block info) to be smaller than target instance
         target = int(str(int(10 ** round((256 - self.target_bits) / 4))), 16)  # target bits -> target instance
@@ -602,13 +647,15 @@ class Chain(object):
 
     # check if proof of work is valid for a single block
     def check_block_pow(self, block):
-        all_ids_txs_in_one = ''
-        for tx in block.transactions:
-            all_ids_txs_in_one += tx.id
-        tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
-        all_in_one = str(block.block.time_stamp) + str(tx_hash) + str(block.block.prev_hash) + '{:x}'.format(int(block.nonce))
-        target = int(str(int(10 ** round((256 - self.target_bits) / 4))), 16)
+        # all_ids_txs_in_one = ''
+        # for tx in block.transactions:
+        #     all_ids_txs_in_one += tx.id
+        # tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
+        # all_in_one = str(block.block.time_stamp) + str(tx_hash) + str(block.block.prev_hash) + '{:x}'.format(
+        #     int(block.nonce))
+        all_in_one = block.txsRootNode + '{:x}'.format(int(block.nonce))
         data_hash = hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
+        target = int(str(int(10 ** round((256 - self.target_bits) / 4))), 16)
         return ((int(data_hash, 16) > target) - (int(data_hash, 16) < target)) == -1
 
     def check_pow(self):
@@ -616,27 +663,28 @@ class Chain(object):
         if blocks is None:
             return None
         for serialized_block in blocks:
-            block = self.de_serialize(serialized_block.serializedBlock)
+            block = self.de_serialize_block(serialized_block.serializedBlock)
             print('Proof of work: ' + 'valid' if self.check_block_pow(block) else 'invalid')
             print('\n')
 
     def new_block(self, transactions, mk_hash, prev_hash):
+        for transaction in transactions:
+            transaction.included_in_block = datetime.now()
         block = Block(datetime.now(), transactions, mk_hash, prev_hash, '', '')
         block.hash, block.nonce = self.pow(block)
         return block
 
-    def set_hash(self, block):
-        all_ids_txs_in_one = ''
-        for tx in block.transactions:
-            all_ids_txs_in_one += tx.id
-        tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
-        all_in_one = str(block.time_stamp) + str(tx_hash) + str(block.prev_hash) + '{:x}'.format(int(block.nonce))
-        return hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
+    # def set_hash(self, block):
+    #     all_ids_txs_in_one = ''
+    #     for tx in block.transactions:
+    #         all_ids_txs_in_one += tx.id
+    #     tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
+    #     all_in_one = str(block.time_stamp) + str(tx_hash) + str(block.prev_hash) + '{:x}'.format(int(block.nonce))
+    #     return hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
 
     def add_block(self, transactions):
-        print('Mining the block...')
         for tx in transactions:
-            if self.verify_transaction(tx) is False:
+            if not self.verify_transaction(tx):
                 print('Invalid transaction')
                 return False
         txs_hashes = self.merkle_tree.get_txs_hashes(transactions)
@@ -645,16 +693,17 @@ class Chain(object):
         prev_block = models.Blocks.query.filter_by(hash=last_block.hash).first()
         if prev_block is None:
             print("Blockchain is not initialized yet.")
-            return
-        prev_block = self.de_serialize(prev_block.serializedBlock)
+            return False
+        prev_block = self.de_serialize_block(prev_block.serializedBlock)
         new_block = self.new_block(
             transactions,
             mk_hash,
             prev_block.hash
         )
-        serialized_block = self.serialize(new_block)
+        serialized_block = self.serialize_block(new_block)
         # de_serialized_block = self.deSerialize(serialized_block)
-        db_block = models.Blocks(hash=new_block.hash, txsRootNode=new_block.txsRootNode, serializedBlock=serialized_block)
+        db_block = models.Blocks(hash=new_block.hash, txsRootNode=new_block.txsRootNode,
+                                 serializedBlock=serialized_block)
         db.session.add(db_block)
         db_last_block = models.LastBlock.query.first()
         if db_last_block is None:
@@ -666,30 +715,75 @@ class Chain(object):
         return True
 
     def send(self, fr, to, amount):
+        fr_pined_transactions, error = self.get_from_pool(fr)
+        if fr_pined_transactions is None and error != "":
+            print(error)
         print('Sending data=' + str(amount) + ' from ' + fr + ' to ' + to)
-        transaction = self.new_transaction(fr, to, amount)
-        if transaction:
-            block_is_added = self.add_block([transaction])
-            # update unspent transactions outputs
-            if not self.is_coin_base(transaction):
-                self.chain_state.update_utxo(transaction)
-            if block_is_added:
-                print('Success.')
-            else:
-                print('Error.')
+        transaction, error = self.new_transaction(fr, to, amount)
+        if transaction and error == "":
+            # add transaction to pull
+            serialized_transaction = self.serialize_transaction(transaction, True)
+            pool_tx = models.TXPool(txID=transaction.id, fromAddr=fr,
+                                    toAddr=to, amount=amount,
+                                    serializedTransaction=json.dumps(serialized_transaction), error=False,
+                                    errorText=None)
+            db.session.add(pool_tx)
+            db.session.commit()
+            print("Transaction is added to pool.")
+        else:
+            pool_tx = models.TXPool(txID=None, fromAddr=fr,
+                                    toAddr=to, amount=amount,
+                                    serializedTransaction=None, error=True, errorText=error)
+            db.session.add(pool_tx)
+            db.session.commit()
+            print(error)
 
-    def get_balance(self, address):
-        wallets = self.get_wallets()
+    def mine_block(self, who, tx_count=5):
+        print('Mining the block...')
+        pined_transactions = models.TXPool.query.filter(models.TXPool.error == False).limit(tx_count).all()
+        if pined_transactions is None:
+            print('There is no new transactions to mine new block.')
+            return
+        transactions = []
+        for pined_transaction in pined_transactions:
+            # serialized_transaction = json.loads(pined_transaction.serializedTransaction)
+            transaction = self.de_serialize_transaction(pined_transaction.serializedTransaction, True)
+            transactions.append(transaction)
+        reward_tx, error = self.reward_transaction(who)
+        if reward_tx is None and error != "":
+            print(error)
+            return
+        transactions.append(reward_tx)
+        block_is_added = self.add_block(transactions)
+        if block_is_added:
+            # update unspent transactions outputs
+            for transaction in transactions:
+                if not self.is_coin_base(transaction):
+                    self.chain_state.update_utxo(transaction)
+            unpined_transactions_ids = []
+            for pined_transaction in pined_transactions:
+                unpined_transactions_ids.append(pined_transaction.txID)
+            db.session.query(models.TXPool).filter(models.TXPool.txID.in_(unpined_transactions_ids)).delete()
+            db.session.commit()
+            print('Success.')
+        else:
+            print('Error.')
+
+    def get_balance(self, address, isValue=False):
+        wallets, error = self.get_wallets()
+        if wallets is None and error != "":
+            return None, error
         wallet = wallets.get(address, False)
         if not wallet:
-            print("There is no such an address: " + address)
-            return
+            return None, "There is no such an address: " + address
         balance = 0
         unspent_txs = self.unspent_txs(self.pub_key_hash(wallet.public_key_bytes))
         if unspent_txs is None:
-            return
+            return None, "Failed to get unspent transactions."
         for tx in unspent_txs:
             balance += int(tx[2].val)
+        if isValue:
+            return balance, ""
         print('Balance of ' + address + ': ' + str(balance))
 
     def show_blocks(self):
@@ -699,7 +793,7 @@ class Chain(object):
         if blocks is None:
             return None
         for index, serialized_block in enumerate(blocks):
-            block = self.de_serialize(serialized_block.serializedBlock)
+            block = self.de_serialize_block(serialized_block.serializedBlock)
             print('Block Id: ' + str(index))
             print('Hash: ' + block.hash)
             print('Nonce: ' + str(block.nonce))
@@ -738,10 +832,9 @@ class Chain(object):
 
     def is_system_initialized(self):
         db_block = models.Blocks.query.first()
-        if db_block is not None:
-            return True
-        else:
+        if db_block is None:
             return False
+        return True
 
     def init_system(self, to):
         if self.is_system_initialized():
@@ -752,8 +845,9 @@ class Chain(object):
             txs_hashes = self.merkle_tree.get_txs_hashes(transactions)
             mk_hash = self.merkle_tree.find_merkle_hash(txs_hashes)
             genesis_block = self.new_block(transactions, mk_hash, '')
-            serialized_genesis_block = self.serialize(genesis_block)
-            db_block = models.Blocks(hash=genesis_block.hash, txsRootNode=genesis_block.txsRootNode, serializedBlock=serialized_genesis_block)
+            serialized_genesis_block = self.serialize_block(genesis_block)
+            db_block = models.Blocks(hash=genesis_block.hash, txsRootNode=genesis_block.txsRootNode,
+                                     serializedBlock=serialized_genesis_block)
             db.session.add(db_block)
             db_last_block = models.LastBlock(hash=genesis_block.hash)
             db.session.add(db_last_block)
@@ -762,13 +856,14 @@ class Chain(object):
             blocks = self.get_blocks()
             if blocks is None:
                 print("Failed reindex.")
-            self.chain_state.reindex(blocks, self.de_serialize)
+            self.chain_state.reindex(blocks, self.de_serialize_block)
 
     def is_serialized_soinbase_tx(self, jsonTx):
-        return len(jsonTx["inputs"]) == 1 and json.loads(jsonTx["inputs"][0])["id"] == 0 and json.loads(jsonTx["inputs"][0])[
-            "output"] == -1
+        return len(jsonTx["inputs"]) == 1 and json.loads(jsonTx["inputs"][0])["id"] == 0 and \
+               json.loads(jsonTx["inputs"][0])[
+                   "output"] == -1
 
-    def serialize(self, block):
+    def serialize_block(self, block):
         json_block = {
             "timeStamp": block.time_stamp.isoformat(),
             "transactions": [],
@@ -778,65 +873,47 @@ class Chain(object):
             "nonce": block.nonce
         }
         for tx in block.transactions:
-            json_tx = {
-                "id": tx.id,
-                "inputs": [],
-                "outputs": []
-            }
-            for v_in in tx.inputs:
-                json_vin = {
-                    "id": v_in.id,
-                    "output": v_in.output,
-                    "sig": (DEREncoder.encode_signature(v_in.sig["r"], v_in.sig["s"])).decode(
-                        "latin1") if not self.is_coin_base(tx) else None,
-                    "publicKey": PEMEncoder.encode_public_key(v_in.public_key) if not self.is_coin_base(tx) else v_in.public_key,
-                    "publicKeyBytes": (v_in.public_key_bytes).decode("latin1") if not self.is_coin_base(
-                        tx) else v_in.public_key_bytes
-                }
-                json_tx["inputs"].append(json.dumps(json_vin))
-            for v_out in tx.outputs:
-                jsonv_out = {
-                    "val": v_out.val,
-                    "publicKeyHash": (v_out.public_key_hash).decode("latin1")
-                }
-                json_tx["outputs"].append(json.dumps(jsonv_out))
+            json_tx = self.serialize_transaction(tx)
             json_block["transactions"].append(json.dumps(json_tx))
         json_data = json.dumps(json_block)
         return json_data
 
-    def de_serialize(self, json_data):
+    def serialize_transaction(self, transaction, to_txs_pool=False):
+        json_tx = {
+            "id": transaction.id,
+            "inputs": [],
+            "outputs": [],
+            "created": transaction.created.isoformat()
+        }
+        if not to_txs_pool:
+            json_tx["included_in_block"] = transaction.included_in_block.isoformat()
+        for v_in in transaction.inputs:
+            json_vin = {
+                "id": v_in.id,
+                "output": v_in.output,
+                "sig": (DEREncoder.encode_signature(v_in.sig["r"], v_in.sig["s"])).decode(
+                    "latin1") if not self.is_coin_base(transaction) else None,
+                "publicKey": PEMEncoder.encode_public_key(v_in.public_key) if not self.is_coin_base(
+                    transaction) else v_in.public_key,
+                "publicKeyBytes": (v_in.public_key_bytes).decode("latin1") if not self.is_coin_base(
+                    transaction) else v_in.public_key_bytes
+            }
+            json_tx["inputs"].append(json.dumps(json_vin))
+        for v_out in transaction.outputs:
+            jsonv_out = {
+                "val": v_out.val,
+                "publicKeyHash": (v_out.public_key_hash).decode("latin1")
+            }
+            json_tx["outputs"].append(json.dumps(jsonv_out))
+        return json_tx
+
+    def de_serialize_block(self, json_data):
         json_block = json.loads(json_data)
         block_tx = []
         for tx in json_block["transactions"]:
-            json_tx = json.loads(tx)
-            block_inputs = []
-            for input in json_tx["inputs"]:
-                json_input = json.loads(input)
-                sig = DEREncoder.decode_signature(json_input["sig"].encode("latin1")) if json_input["sig"] is not None else None
-                block_inputs.append(
-                    TransactionInput(
-                        json_input["id"],
-                        json_input["output"],
-                        {'r': sig[0], 's': sig[1]} if not self.is_serialized_soinbase_tx(json_tx) else sig,
-                        PEMEncoder.decode_public_key(json_input["publicKey"], curve=curve.P256) if not self.is_serialized_soinbase_tx(json_tx) else json_input["publicKey"],
-                        json_input["publicKeyBytes"].encode("latin1") if not self.is_serialized_soinbase_tx(json_tx) else json_input["publicKeyBytes"]
-                    )
-                )
-            block_outputs = []
-            for outputs in json_tx["outputs"]:
-                json_output = json.loads(outputs)
-                block_outputs.append(
-                    TransactionOutput(
-                        json_output["val"],
-                        json_output["publicKeyHash"].encode("latin1")
-                    )
-                )
+            transaction = self.de_serialize_transaction(tx)
             block_tx.append(
-                Transaction(
-                    json_tx["id"],
-                    block_inputs,
-                    block_outputs
-                )
+                transaction
             )
         block = Block(
             datetime.fromisoformat(json_block["timeStamp"]),
@@ -848,6 +925,49 @@ class Chain(object):
         )
         return block
 
+    def de_serialize_transaction(self, transaction, from_txs_pool=False):
+        json_tx = json.loads(transaction)
+        block_inputs = []
+        for input in json_tx["inputs"]:
+            json_input = json.loads(input)
+            sig = DEREncoder.decode_signature(json_input["sig"].encode("latin1")) if json_input[
+                                                                                         "sig"] is not None else None
+            block_inputs.append(
+                TransactionInput(
+                    json_input["id"],
+                    json_input["output"],
+                    {'r': sig[0], 's': sig[1]} if not self.is_serialized_soinbase_tx(json_tx) else sig,
+                    PEMEncoder.decode_public_key(json_input["publicKey"],
+                                                 curve=curve.P256) if not self.is_serialized_soinbase_tx(json_tx) else
+                    json_input["publicKey"],
+                    json_input["publicKeyBytes"].encode("latin1") if not self.is_serialized_soinbase_tx(json_tx) else
+                    json_input["publicKeyBytes"]
+                )
+            )
+        block_outputs = []
+        for outputs in json_tx["outputs"]:
+            json_output = json.loads(outputs)
+            block_outputs.append(
+                TransactionOutput(
+                    json_output["val"],
+                    json_output["publicKeyHash"].encode("latin1")
+                )
+            )
+        if from_txs_pool:
+            return Transaction(
+                json_tx["id"],
+                block_inputs,
+                block_outputs,
+                datetime.fromisoformat(json_tx["created"]),
+            )
+        return Transaction(
+            json_tx["id"],
+            block_inputs,
+            block_outputs,
+            datetime.fromisoformat(json_tx["created"]),
+            datetime.fromisoformat(json_tx["included_in_block"])
+        )
+
 
 class BlockChain(Chain):
     def __init__(self):
@@ -858,6 +978,6 @@ class BlockChain(Chain):
             blocks = self.get_blocks()
             if blocks is None:
                 print("Failed reindex.")
-            self.chain_state.reindex(blocks, self.de_serialize)
+            self.chain_state.reindex(blocks, self.de_serialize_block)
         else:
-            print('Blockchain is not initialized yet.')
+            print('Blockchain system is not initialized yet.')
