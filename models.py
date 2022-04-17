@@ -6,13 +6,14 @@ class Blocks(db.Model):
     __tablename__ = 'b'
 
     hash = db.Column(db.String(256), primary_key=True, nullable=False)
+    txsRootNode = db.Column(db.String(256), nullable=False)
     serializedBlock = db.Column(db.Text, nullable=False)
 
     def __init__(self, *args, **kwargs):
         super(Blocks, self).__init__(*args, **kwargs)
         
     def __repr__(self):
-        return 'hash: {}, serializedBlock: {}>'.format(self.hash, self.serializedBlock)
+        return 'hash: {}, txsRootNode: {}, serializedBlock: {}>'.format(self.hash, self.txsRootNode, self.serializedBlock)
 
 
 # hash of the last block in a chain

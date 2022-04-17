@@ -69,13 +69,36 @@ class TransactionOutput(object):
 
 
 class Block(object):
-    def __init__(self, time_stamp, transactions, prev_hash, hash, nonce):
+    def __init__(self, time_stamp, transactions, txsRootNode, prev_hash, hash, nonce):
         self.time_stamp = time_stamp
         self.transactions = transactions
+        self.txsRootNode = txsRootNode
         self.prev_hash = prev_hash
         self.hash = hash
         self.nonce = nonce
 
+
+class MerkleTree(object):
+    def __init__(self):
+        pass
+
+    def get_txs_hashes(self, transactions):
+        txs_hashes = []
+        for transaction in transactions:
+            txs_hashes.append(transaction.id)
+        return txs_hashes
+
+    def find_merkle_hash(self, txs_hashes):
+        if len(txs_hashes) % 2 != 0:
+            txs_hashes.append(txs_hashes[len(txs_hashes) - 1])
+        secondary = []
+        for k in [txs_hashes[x:x + 2] for x in range(0, len(txs_hashes), 2)]:
+            secondary.append(hashlib.sha256((k[0] + k[1]).encode('utf-8')).hexdigest())
+        if len(secondary) == 1:
+            return secondary[0]
+        else:
+            self.find_merkle_hash(secondary)
+        pass
 
 class ChainState(object):
     def __init__(self):
@@ -234,7 +257,6 @@ class ChainState(object):
                     )
         return unspent_tx_outputs
 
-
 class Chain(object):
     def __init__(self):
         # wallets store location
@@ -250,6 +272,7 @@ class Chain(object):
         self.version = bytes(0x00)
         # unspent transaction outputs - cache
         self.chain_state = ChainState()
+        self.merkle_tree = MerkleTree()
 
     def new_wallet(self):
         pr_key, pub_key, pub_key_bytes = self.new_key_pair()
@@ -545,12 +568,12 @@ class Chain(object):
         # we need to calculate new hash(for new block) with (nonce + new block info) to be smaller than target instance
         target = int(str(int(10 ** round((256 - self.target_bits) / 4))), 16)  # target bits -> target instance
         max_int64 = int(9223372036854775807)  # 64 bits (8 bytes). To prevent overflow
-        nonce, all_ids_txs_in_one, data_hash = 0, '', ''
-        for tx in block.transactions:
-            all_ids_txs_in_one += tx.id
-        tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
+        nonce, data_hash = 0, ''
+        # for tx in block.transactions:
+        #     all_ids_txs_in_one += tx.id
+        # tx_hash = hashlib.sha256(all_ids_txs_in_one.encode('utf-8')).hexdigest()
         while nonce < max_int64:
-            all_in_one = str(block.time_stamp) + str(tx_hash) + str(block.prev_hash) + '{:x}'.format(int(nonce))
+            all_in_one = block.txsRootNode + '{:x}'.format(int(nonce))
             data_hash = hashlib.sha256(all_in_one.encode('utf-8')).hexdigest()
             # cmp
             if ((int(data_hash, 16) > target) - (int(data_hash, 16) < target)) == -1:
@@ -597,8 +620,8 @@ class Chain(object):
             print('Proof of work: ' + 'valid' if self.check_block_pow(block) else 'invalid')
             print('\n')
 
-    def new_block(self, transactions, prev_hash):
-        block = Block(datetime.now(), transactions, prev_hash, '', '')
+    def new_block(self, transactions, mk_hash, prev_hash):
+        block = Block(datetime.now(), transactions, mk_hash, prev_hash, '', '')
         block.hash, block.nonce = self.pow(block)
         return block
 
@@ -616,7 +639,8 @@ class Chain(object):
             if self.verify_transaction(tx) is False:
                 print('Invalid transaction')
                 return False
-        # prev_block = self.blocks[len(self.blocks) - 1]
+        txs_hashes = self.merkle_tree.get_txs_hashes(transactions)
+        mk_hash = self.merkle_tree.find_merkle_hash(txs_hashes)
         last_block = models.LastBlock.query.first()
         prev_block = models.Blocks.query.filter_by(hash=last_block.hash).first()
         if prev_block is None:
@@ -625,19 +649,12 @@ class Chain(object):
         prev_block = self.de_serialize(prev_block.serializedBlock)
         new_block = self.new_block(
             transactions,
-            self.set_hash(
-                Block(
-                    prev_block.time_stamp,
-                    prev_block.transactions,
-                    prev_block.prev_hash,
-                    prev_block.hash,
-                    prev_block.nonce
-                )
-            )
+            mk_hash,
+            prev_block.hash
         )
         serialized_block = self.serialize(new_block)
         # de_serialized_block = self.deSerialize(serialized_block)
-        db_block = models.Blocks(hash=new_block.hash, serializedBlock=serialized_block)
+        db_block = models.Blocks(hash=new_block.hash, txsRootNode=new_block.txsRootNode, serializedBlock=serialized_block)
         db.session.add(db_block)
         db_last_block = models.LastBlock.query.first()
         if db_last_block is None:
@@ -646,7 +663,6 @@ class Chain(object):
         else:
             db_last_block.hash = new_block.hash
         db.session.commit()
-        # self.blocks.append(newBlock)
         return True
 
     def send(self, fr, to, amount):
@@ -733,9 +749,11 @@ class Chain(object):
         else:
             print('Mining the Genesis Block with data "Genesis Block"...')
             transactions = [self.coin_base_tx(to, "Genesis block")]
-            genesis_block = self.new_block(transactions, '')
+            txs_hashes = self.merkle_tree.get_txs_hashes(transactions)
+            mk_hash = self.merkle_tree.find_merkle_hash(txs_hashes)
+            genesis_block = self.new_block(transactions, mk_hash, '')
             serialized_genesis_block = self.serialize(genesis_block)
-            db_block = models.Blocks(hash=genesis_block.hash, serializedBlock=serialized_genesis_block)
+            db_block = models.Blocks(hash=genesis_block.hash, txsRootNode=genesis_block.txsRootNode, serializedBlock=serialized_genesis_block)
             db.session.add(db_block)
             db_last_block = models.LastBlock(hash=genesis_block.hash)
             db.session.add(db_last_block)
@@ -754,6 +772,7 @@ class Chain(object):
         json_block = {
             "timeStamp": block.time_stamp.isoformat(),
             "transactions": [],
+            "txsRootNode": block.txsRootNode,
             "prevHash": block.prev_hash,
             "hash": block.hash,
             "nonce": block.nonce
@@ -822,6 +841,7 @@ class Chain(object):
         block = Block(
             datetime.fromisoformat(json_block["timeStamp"]),
             block_tx,
+            json_block["txsRootNode"],
             json_block["prevHash"],
             json_block["hash"],
             json_block["nonce"]
