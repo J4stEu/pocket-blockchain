@@ -1,0 +1,6 @@
+# cd blockchain_backend/app/db
+# FLASK_APP=().py flask db init
+# or
+# flask db init
+# flask db migrate -m "migrating database"
+# flask db upgrade

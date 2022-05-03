@@ -1,0 +1,29 @@
+{
+  "name": "blockchain-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^2.3.1",
+    "element-plus": "^2.1.11",
+    "hex-to-rgba": "^2.0.1",
+    "pinia": "^2.0.13",
+    "sass": "^1.51.0",
+    "vite": "^2.9.5",
+    "vite-svg-loader": "^3.3.0",
+    "vue": "^3.2.25",
+    "vue-router": "4"
+  },
+  "devDependencies": {
+    "eslint": "^8.14.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-vue": "^8.7.1",
+    "prettier": "2.6.2",
+    "unplugin-auto-import": "^0.7.1",
+    "unplugin-vue-components": "^0.19.3"
+  }
+}

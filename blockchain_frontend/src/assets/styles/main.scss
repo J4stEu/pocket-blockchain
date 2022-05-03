@@ -1,0 +1,57 @@
+// common styles
+@import "reset";
+@import "fonts";
+h1 {
+  font-family: "Open Sans bold", serif !important;
+}
+p, a, div {
+  font-family: "Open Sans", serif !important;
+}
+.table {
+  font-size: 1em;
+  width: 100%;
+  --el-table-header-text-color: #{$brown};
+  --el-table-text-color: black;
+  --el-table-border: 1px solid black;
+  --el-table-row-hover-bg-color: white;
+}
+.more {
+  svg {
+    cursor: pointer;
+  }
+}
+.bcInstanceHeader {
+  padding-bottom: $offsetVal + px;
+  white-space: normal !important;
+  text-indent: 1em;
+  text-align: justify;
+}
+// responsiveness styles
+.container {
+  flex-grow: 1;
+  margin: 0 auto;
+  position: relative;
+
+  @media screen and (min-width: 0px) and (max-width: 1023px) {
+    width: auto;
+    max-width: unset;
+  }
+  @media screen and (min-width: 1024px) and (max-width: 1215px) {
+    max-width: 960px;
+  }
+  @media screen and (min-width: 1216px) and (max-width: 1407px) {
+    max-width: 1152px;
+  }
+  @media screen and (min-width: 1408px){
+    max-width: 1344px;
+  }
+}
+.is-max-desktop {
+  @media screen and (min-width: 1022px) {
+    width: auto;
+    max-width: unset;
+  }
+  @media screen and (min-width: 1023px) {
+    max-width: 960px;
+  }
+}
