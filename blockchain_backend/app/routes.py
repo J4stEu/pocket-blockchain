@@ -1,7 +1,7 @@
 from .app import app
 from .bc_app import bc
+from flask import request
 import json
-
 
 @app.route('/')
 def index():
@@ -11,58 +11,86 @@ def index():
         return "<p>Blockchain is not initialized yet.</p>"
 
 
-@app.route('/get_wallets')
+@app.route('/get_wallets', methods=["GET"])
 def get_wallets():
-    wallets_info = {}
-    wallets, error = bc.get_wallets()
-    if wallets is None and error != "":
-        return {
-            "error": error
-        }
-    for address, wallet in wallets.items():
-        acc, error = bc.get_balance(address, True)
-        if acc is not None and error == "":
-            wallets_info[address] = {
-                "wallet": bc.serialize_wallet(wallet),
-                "balance": acc
+    if request.method == 'GET':
+        wallets_info = []
+        data = bc.get_wallets()
+        if isinstance(data, Exception):
+            return {
+                "data": None,
+                "error": data
             }
-    return wallets_info
-
-
-@app.route('/get_blocks')
-def get_blocks():
-    blocks = []
-    for block in bc.get_blocks():
-        blocks.append({
-            "hash": block.hash,
-            "serializedBlock": block.serializedBlock,
-            "txsRootNode": block.txsRootNode
-        })
-    return json.dumps(blocks)
-
-
-@app.route('/get_chainstate')
-def get_chainstate():
-    utxo = {}
-    for serialized_utxo_item in bc.chain_state.get_utxo(False):
-        utxo[serialized_utxo_item.txID] = {
-            "serializedUnspentOutputs": serialized_utxo_item.serializedUnspentOutputs
+        wallets = data
+        for address, wallet in wallets.items():
+            data = bc.get_balance(address)
+            if not isinstance(data, Exception):
+                balance = data
+                wallets_info.append(
+                    {
+                        "address": address,
+                        "wallet": bc.serialize_wallet(wallet),
+                        "balance": balance
+                    }
+                )
+        return {
+            "data": wallets_info,
+            "error": None
         }
-    return utxo
 
 
-@app.route('/get_pool')
+@app.route('/new_wallet', methods=["POST"])
+def new_wallet():
+    if request.method == 'POST':
+        data = bc.new_wallet()
+        if isinstance(data, Exception):
+            return {
+                "data": None,
+                "error": "{}: {}".format(data.error_type, data.error_message)
+            }
+        return {
+            "data": data,
+            "error": None
+        }
+
+
+@app.route('/get_blocks', methods=["GET"])
+def get_blocks():
+    if request.method == 'GET':
+        blocks = []
+        for block in bc.get_blocks():
+            blocks.append({
+                "hash": block.hash,
+                "serializedBlock": block.serializedBlock,
+                "txsRootNode": block.txsRootNode
+            })
+        return json.dumps(blocks)
+
+
+@app.route('/get_chainstate', methods=["GET"])
+def get_chainstate():
+    if request.method == 'GET':
+        utxo = {}
+        for serialized_utxo_item in bc.chain_state.get_utxo(False):
+            utxo[serialized_utxo_item.txID] = {
+                "serializedUnspentOutputs": serialized_utxo_item.serializedUnspentOutputs
+            }
+        return utxo
+
+
+@app.route('/get_pool', methods=["GET"])
 def get_pool():
-    txs_pool = bc.get_all_pool()
-    pool = []
-    for tx in txs_pool:
-        pool.append({
-            "txID": tx.txID,
-            "fromAddr": tx.fromAddr,
-            "toAddr": tx.toAddr,
-            "amount": tx.amount,
-            "serializedTransaction": tx.serializedTransaction,
-            "error": tx.error,
-            "errorText": tx.errorText
-        })
-    return json.dumps(pool)
+    if request.method == 'GET':
+        txs_pool = bc.get_all_pool()
+        pool = []
+        for tx in txs_pool:
+            pool.append({
+                "txID": tx.txID,
+                "fromAddr": tx.fromAddr,
+                "toAddr": tx.toAddr,
+                "amount": tx.amount,
+                "serializedTransaction": tx.serializedTransaction,
+                "error": tx.error,
+                "errorText": tx.errorText
+            })
+        return json.dumps(pool)

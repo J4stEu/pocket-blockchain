@@ -53,14 +53,8 @@ export default {
     methods: {
         async getChainState() {
             this.fetching = true;
-            await fetch("http://192.168.1.7:5000/get_pool", {
-                method: "GET",
-                mode: "cors",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
+            await fetch("/api/get_pool", {
+                method: "GET"
             })
                 .then(response => response.json())
                 .then(data => {

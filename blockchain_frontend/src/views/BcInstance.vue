@@ -1,5 +1,5 @@
 <template>
-  <section id="infoAndActions" class="container is-max-desktop">
+  <section id="bcInstance" class="container is-max-desktop">
     <div>
       <Navigation
           :navItems="navItems"
@@ -65,7 +65,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-  #infoAndActions {
+  #bcInstance {
     display: flex;
     flex-direction: column;
     justify-content: flex-start;

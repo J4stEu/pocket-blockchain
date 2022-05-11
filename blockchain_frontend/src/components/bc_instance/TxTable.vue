@@ -8,7 +8,7 @@
           <div class="inputsRepresentation" m="4" v-for="input in props.row.inputs" key="input.id">
             <p m="t-0 b-2"><span>Input ID:</span> <span>{{ JSON.parse(input).id }}</span></p>
             <p m="t-0 b-2"><span>Output ID (reference):</span> <span>{{  JSON.parse(input).output }}</span></p>
-            <p m="t-0 b-2"><span>Signature (latin1 decoded):</span> <span>{{  JSON.parse(input).sig }}</span></p>
+            <p m="t-0 b-2"><span>Signature (latin1 decoded):</span> <span>{{JSON.parse(input).sig ? JSON.parse(input).sig : "None" }}</span></p>
             <p m="t-0 b-2"><span>Public key:</span> <span>{{  JSON.parse(input).publicKey }}</span></p>
           </div>
           <div class="outputsRepresentation" m="4" v-for="(output, index) in props.row.outputs" key="input.id">

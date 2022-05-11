@@ -39,14 +39,8 @@ export default {
     methods: {
         async getChainState() {
             this.fetching = true;
-            await fetch("http://192.168.1.7:5000/get_chainstate", {
-                method: "GET",
-                mode: "cors",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
+            await fetch("/api/get_chainstate", {
+                method: "GET"
             })
                 .then(response => response.json())
                 .then(data => {

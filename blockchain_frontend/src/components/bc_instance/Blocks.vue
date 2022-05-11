@@ -46,14 +46,8 @@ export default {
     methods: {
         async getBlocks() {
             this.fetching = true;
-            await fetch("http://192.168.1.7:5000/get_blocks", {
+            await fetch("/api/get_blocks", {
                 method: "GET",
-                mode: "cors",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
             })
                 .then(response => response.json())
                 .then(data => {

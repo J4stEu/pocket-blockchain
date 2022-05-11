@@ -1,15 +1,18 @@
 <template>
   <div id="app">
     <Header/>
+    <Notification/>
     <router-view></router-view>
   </div>
 </template>
 
 <script>
 import Header from "@/views/Header.vue";
+import Notification from "@/components/ui/Notification.vue";
 export default {
     components: {
-        Header
+        Header,
+        Notification
     }
 };
 </script>

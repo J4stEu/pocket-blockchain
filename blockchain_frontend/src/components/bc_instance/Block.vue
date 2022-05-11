@@ -42,13 +42,13 @@ export default {
 
 <style lang="scss" scoped>
   .block {
-    width: calc(100% - #{calc($offsetVal / 4) * 2 + px});
-    height: calc(100% - #{calc($offsetVal / 4) * 2 + px});
+    width: calc(100% - #{calc($offsetVal / 2) * 2 + px});
+    height: calc(100% - #{calc($offsetVal / 2) * 2 + px});
     display: flex;
     flex-direction: column;
     justify-content: space-around;
     border: 1px solid black;
-    padding: calc($offsetVal / 4) + px;
+    padding: calc($offsetVal / 2) + px;
   }
   div {
     display: flex;
@@ -70,6 +70,7 @@ export default {
         &:first-child {
           width: $offsetVal * 8 + px;
           color: $brown;
+          text-decoration: underline;
           white-space: nowrap;
         }
         &:last-child {

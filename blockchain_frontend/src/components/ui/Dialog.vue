@@ -31,7 +31,7 @@ export default {
     position: fixed;
     background: rgba(0, 0, 0, 0.5);
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
 
     .dialogContent {
@@ -40,6 +40,11 @@ export default {
       background: white;
       max-height: calc(100vh - #{$offsetVal * 7 + px});
       overflow: auto;
+      border-radius: $offsetVal + px;
+
+      @media screen and (min-width: 0px) and (max-width: 1023px) {
+        margin: 0 $offsetVal + px;
+      }
     }
   }
 </style>

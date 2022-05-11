@@ -30,5 +30,15 @@ export default defineConfig({
         Components({
             resolvers: [ElementPlusResolver()],
         }),
-    ]
+    ],
+    server: {
+        proxy: {
+            "/api": {
+                target: "http://192.168.31.144:5000",
+                changeOrigin: true,
+                secure: false,
+                rewrite: (path) => path.replace(/^\/api/, ""),
+            }
+        }
+    }
 });

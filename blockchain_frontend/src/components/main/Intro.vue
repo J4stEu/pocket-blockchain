@@ -2,10 +2,10 @@
   <section id="intro">
     <div>
       <h1>
-        BlockChain Python
+        Pocket BlockChain
       </h1>
       <ITSButton
-          text="blockchain-python"
+          text="pocket-blockchain"
           src="https://github.com/J4stEu/blockchain-python"
           :isSrc="true"
           :buttonColor="'rgba(76, 212, 176, 0.2)'"

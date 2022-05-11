@@ -42,6 +42,7 @@ export default {
     text-decoration: none;
     color: black;
     padding: calc($offsetVal / 4) + px;
+    cursor: pointer;
   }
   p {
     padding: 0 calc($offsetVal / 4) + px 0 calc($offsetVal / 4) + px;
