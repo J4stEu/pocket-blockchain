@@ -22,5 +22,10 @@ export default {
     flex-direction: column;
     justify-content: center;
     height: 100%;
+
+    @media screen and (min-height: 0px) and (max-height: 799px) {
+      justify-content: flex-start;
+    }
+
   }
 </style>

@@ -46,7 +46,8 @@ class UTXO(db.Model):
 class TXPool(db.Model):
     __tablename__ = 'p'
 
-    txID = db.Column(db.String(256), primary_key=True, nullable=True)
+    id = db.Column(db.INT, primary_key=True, autoincrement=True)
+    txID = db.Column(db.String(256), nullable=True)
     fromAddr = db.Column(db.Text, nullable=False)
     toAddr = db.Column(db.Text, nullable=False)
     amount = db.Column(db.INT, nullable=False)

@@ -36,7 +36,7 @@ export default {
 
 <style lang="scss" scoped>
   a, div {
-    display: inline-flex;
+    display: inline-flex !important;
     border-radius: calc($offsetVal / 4) + px;
     align-items: center;
     text-decoration: none;

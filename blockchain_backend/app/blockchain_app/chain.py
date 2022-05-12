@@ -477,7 +477,7 @@ class Chain(object):
         data = self.get_from_pool(fr)
         if isinstance(data, Exception):
             print("{}: {}".format(data.error_type, data.error_message))
-            return
+            return data
         fr_pined_transactions = data
         # if fr_pined_transactions is None and error != "":
         #     print(error)
@@ -492,7 +492,7 @@ class Chain(object):
             self.db.session.add(pool_tx)
             self.db.session.commit()
             print("{}: {}".format(data.error_type, data.error_message))
-            return
+            return data
         transaction = data
         # add transaction to pull
         serialized_transaction = self.serialize_transaction(transaction, True)
@@ -503,6 +503,7 @@ class Chain(object):
         self.db.session.add(pool_tx)
         self.db.session.commit()
         print("Transaction is added to pool.")
+        return True
 
     def get_balance(self, address):
         try:
@@ -716,40 +717,43 @@ class Chain(object):
         return True
 
     def mine_block(self, who, tx_count=5):
-        print('Mining the block...')
-        pined_transactions = models.TXPool.query.filter(models.TXPool.error == False).limit(tx_count).all()
-        if pined_transactions is None:
-            print('There is no new transactions to mine new block.')
-            return
-        transactions = []
-        for pined_transaction in pined_transactions:
-            # serialized_transaction = json.loads(pined_transaction.serializedTransaction)
-            transaction = self.de_serialize_transaction(pined_transaction.serializedTransaction, True)
-            transactions.append(transaction)
-        # reward_tx, error = self.reward_transaction(who)
-        data = self.reward_transaction(who)
-        if isinstance(data, Exception):
-            print("{}: {}".format(data.error_type, data.error_message))
-            return
-        # if reward_tx is None and error != "":
-        #     print(error)
-        #     return
-        reward_tx = data
-        transactions.append(reward_tx)
-        block_is_added = self.add_block(transactions)
-        if block_is_added:
-            # update unspent transactions outputs
-            for transaction in transactions:
-                if not self.is_coin_base(transaction):
-                    self.chain_state.update_utxo(transaction)
-            unpined_transactions_ids = []
+        try:
+            print('Mining the block...')
+            pined_transactions = models.TXPool.query.filter(models.TXPool.error == False).limit(tx_count).all()
+            if pined_transactions is None:
+                # print('There is no new transactions to mine new block.')
+                raise BcSystemError("Transactions", "There is no new transactions to mine new block.")
+            transactions = []
             for pined_transaction in pined_transactions:
-                unpined_transactions_ids.append(pined_transaction.txID)
-            self.db.session.query(models.TXPool).filter(models.TXPool.txID.in_(unpined_transactions_ids)).delete()
-            self.db.session.commit()
-            print('Success.')
-        else:
-            print('Error.')
+                # serialized_transaction = json.loads(pined_transaction.serializedTransaction)
+                transaction = self.de_serialize_transaction(pined_transaction.serializedTransaction, True)
+                transactions.append(transaction)
+            # reward_tx, error = self.reward_transaction(who)
+            data = self.reward_transaction(who)
+            if isinstance(data, Exception):
+                print("{}: {}".format(data.error_type, data.error_message))
+                return data
+            # if reward_tx is None and error != "":
+            #     print(error)
+            #     return
+            reward_tx = data
+            transactions.append(reward_tx)
+            if self.add_block(transactions):
+                # update unspent transactions outputs
+                for transaction in transactions:
+                    if not self.is_coin_base(transaction):
+                        self.chain_state.update_utxo(transaction)
+                unpined_transactions_ids = []
+                for pined_transaction in pined_transactions:
+                    unpined_transactions_ids.append(pined_transaction.txID)
+                self.db.session.query(models.TXPool).filter(models.TXPool.txID.in_(unpined_transactions_ids)).delete()
+                self.db.session.commit()
+                print('Success.')
+                return True
+            else:
+                raise BcSystemError("Blocks", "Failed to add block.")
+        except BcSystemError as error:
+            return error
 
     def get_blocks(self):
         if self.is_system_initialized():

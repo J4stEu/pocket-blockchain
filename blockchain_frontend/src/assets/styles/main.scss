@@ -26,6 +26,9 @@ p, a, div {
   text-indent: 1em;
   text-align: justify;
 }
+.bcInstanceAction {
+  margin-bottom: $offsetVal + px;
+}
 // responsiveness styles
 .container {
   flex-grow: 1;

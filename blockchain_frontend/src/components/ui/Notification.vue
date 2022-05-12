@@ -21,7 +21,7 @@ export default {
 
 <style lang="scss" scoped>
   #notification {
-    position: absolute;
+    position: fixed;
     z-index: 3;
     right: $offsetVal + px;
     top: $offsetVal + px;
@@ -30,6 +30,8 @@ export default {
     display: flex;
     justify-content: flex-start;
     align-items: center;
+    border-radius: calc($offsetVal / 4) + px;
+
     span {
       margin-left: $offsetVal + px;
     }

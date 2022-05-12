@@ -1,12 +1,29 @@
 <template>
   <section id="txPool">
+    <Dialog :show="showDialog" @show="showDialog = !showDialog">
+      <div class="sendForm">
+        <span>From: </span>
+        <input type="text" name="from" placeholder="from" v-model="from">
+        <span>To: </span>
+        <input type="text" name="to" placeholder="to" v-model="to">
+        <span>Amount: </span>
+        <input type="number" min="1" name="amount" placeholder="amount" v-model="amount">
+        <div @click="send">
+          <ITSButton text="Send"
+                     :buttonColor="'rgba(76, 212, 176, 0.2)'">
+          </ITSButton>
+        </div>
+      </div>
+    </Dialog>
     <p class="bcInstanceHeader">
       Transactions pool - pool of transactions that are awaiting confirmation (storing in new block).
     </p>
-    <div v-if="fetching">
-      Fetching...
+    <div class="bcInstanceAction" @click="showDialog = !showDialog">
+      <ITSButton text="Send (to, from, amount)"
+                 :buttonColor="'rgba(76, 212, 176, 0.2)'">
+      </ITSButton>
     </div>
-    <el-table v-else-if="!fetching && tableData.length !== 0"
+    <el-table v-if="tableData.length > 0"
               :data="tableData"
               class="table"
     >
@@ -25,7 +42,7 @@
               <p m="t-0 b-2"><span>Public key hash (latin1 decoded):</span> <span>{{  JSON.parse(output).publicKeyHash }}</span></p>
             </div>
           </div>
-          <div v-else>
+          <div v-else class="errorRepresentation">
             <p m="t-0 b-2"><span>TX error:</span> <span>{{  props.row.errorText  }}</span></p>
           </div>
         </template>
@@ -36,22 +53,42 @@
       <el-table-column label="To address" prop="toAddr"/>
       <el-table-column label="Amount" prop="amount" width="150px"/>
     </el-table>
-    <div v-else-if="tableData.length === 0">
+    <div v-else-if="tableData.length === 0 && !fetching">
       There is no chainstate
+    </div>
+    <div v-if="fetching">
+      Fetching...
     </div>
   </section>
 </template>
 
 <script>
+import {useNotificationStore} from "@/hooks/useNotificationStore";
+import Dialog from "@/components/ui/Dialog.vue";
+import ITSButton from "@/components/ui/ITSButton.vue";
 export default {
+    components: {
+        Dialog,
+        ITSButton
+    },
+    setup() {
+        const {notification} = useNotificationStore();
+        return {
+            notification
+        };
+    },
     data() {
         return {
             tableData: [],
             fetching: false,
+            showDialog: false,
+            from: "",
+            to: "",
+            amount: 1
         };
     },
     methods: {
-        async getChainState() {
+        async getTxPool() {
             this.fetching = true;
             await fetch("/api/get_pool", {
                 method: "GET"
@@ -68,16 +105,55 @@ export default {
                             }
                         );
                     });
+                })
+                .finally(() => {
                     this.fetching = false;
                 })
                 .catch(err => {
                     console.log(err);
                     this.fetching = true;
                 });
+        },
+        async send() {
+            this.fetching = true;
+            await fetch("/api/send", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    from: this.from,
+                    to: this.to,
+                    amount: parseInt(this.amount)
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    if (data.error !== null) {
+                        console.log(data.error);
+                        this.notification.notify(data.error, false);
+                        return;
+                    }
+                    this.notification.notify("Success", true);
+                })
+                .finally(() => {
+                    this.fetching = false;
+                    this. from = "";
+                    this.to = "";
+                    this.amount = 1;
+                    this.showDialog = false;
+                    this.getTxPool();
+                })
+                .catch(err => {
+                    console.log(err);
+                    this.notification.notify("Error", false);
+                    this.fetching = true;
+                });
         }
     },
     mounted() {
-        this.getChainState();
+        this.getTxPool();
     }
 };
 </script>
@@ -90,7 +166,7 @@ export default {
     align-items: center;
     margin-top: $offsetVal + px;
   }
-  .inputsRepresentation, .outputsRepresentation {
+  .inputsRepresentation, .outputsRepresentation, .errorRepresentation {
     padding: calc($offsetVal / 2) + px $offsetVal + px;
     margin-left: $offsetVal + px;
     border-bottom: 1px solid black;
@@ -127,6 +203,23 @@ export default {
       &:last-child {
         width: 100%;
       }
+    }
+  }
+  .sendForm {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: $offsetVal+ px;
+
+    input {
+      margin: $offsetVal + px;
+      width: 300px;
+      min-width: calc(300px - #{$offsetVal * 4 + px});
+      height: 25px;
+      border: 1px solid black;
+      border-radius: calc($offsetVal / 4) + px;
+      padding-left: calc($offsetVal / 4) + px;
     }
   }
 </style>

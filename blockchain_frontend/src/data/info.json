@@ -1,0 +1,35 @@
+{
+  "Info": {
+    "Title": "Info",
+    "Options": {
+      "i1": {
+        "option": "Database",
+        "parameter": "Postgres: blockchain"
+      },
+      "i2": {
+        "option": "Tables",
+        "parameter": "b - blocks, c - cache, l - last block hash, p - txs pool"
+      },
+      "i3": {
+        "option": "Wallets store",
+        "parameter": "File: ./wallets.bcw"
+      },
+      "i4": {
+        "option": "Target bits (complexity)",
+        "parameter": "12"
+      },
+      "i5": {
+        "option": "Sign unit",
+        "parameter": "10"
+      },
+      "i6": {
+        "option": "System type",
+        "parameter": "0x00"
+      },
+      "i7": {
+        "option": "System version",
+        "parameter": "0.8"
+      }
+    }
+  }
+}

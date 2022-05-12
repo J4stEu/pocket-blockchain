@@ -47,7 +47,7 @@ export default {
     flex-direction: column;
     justify-content: space-around;
     border: 1px solid black;
-    border-radius: $offsetVal + px;
+    border-radius: calc($offsetVal / 4) + px;
     padding: calc($offsetVal / 2) + px;
 
     svg {

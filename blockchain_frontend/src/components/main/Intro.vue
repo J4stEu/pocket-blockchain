@@ -44,6 +44,10 @@ export default {
   #intro {
     padding: 0 $offsetVal + px;
 
+    @media screen and (min-height: 0px) and (max-height: 799px) {
+      margin-top: $offsetVal * 3 + px;
+    }
+
     div {
       display: flex;
       justify-content: center;

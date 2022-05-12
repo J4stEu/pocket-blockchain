@@ -8,7 +8,7 @@
                      :buttonColor="'rgba(76, 212, 176, 0.2)'"
                      @click="writeDataToClipboard(currentWalletInfo)">
             <template v-slot:beforeIcon>
-              <CopyTpClipboard/>
+              <CopyToClipboard/>
             </template>
           </ITSButton>
         </div>
@@ -17,12 +17,12 @@
     <p class="bcInstanceHeader">
       Wallet - a pair of private and public keys.
     </p>
-    <div class="wallets_action" @click="newWallet">
+    <div class="bcInstanceAction" @click="newWallet">
       <ITSButton text="Create new wallet"
                  :buttonColor="'rgba(76, 212, 176, 0.2)'">
       </ITSButton>
     </div>
-    <div class="walletsContainer" v-if="this.wallets.length > 0">
+    <div class="walletsContainer" v-if="wallets.length > 0">
       <Wallet
           v-for="wallet in wallets" :key="wallet.address"
           :address="wallet.address"
@@ -32,10 +32,10 @@
           @showDialog="showWalletInfo"
       />
     </div>
-    <div v-else>
+    <div v-else-if="wallets.length === 0 && !fetching">
       There are no wallets...
     </div>
-    <div v-if="this.fetching">
+    <div v-if="fetching">
       Fetching...
     </div>
   </section>
@@ -45,22 +45,19 @@
 import Wallet from "@/components/bc_instance/Wallet.vue";
 import Dialog from "@/components/ui/Dialog.vue";
 import ITSButton from "@/components/ui/ITSButton.vue";
-import CopyTpClipboard from "@/assets/icons/iconmonstr-copy-thin.svg?component";
+import CopyToClipboard from "@/assets/icons/iconmonstr-copy-thin.svg?component";
 import {useNotificationStore} from "@/hooks/useNotificationStore";
 export default {
     components: {
         Wallet,
         Dialog,
         ITSButton,
-        CopyTpClipboard
+        CopyToClipboard
     },
     setup() {
-        const {notification, text, show, success} = useNotificationStore();
+        const {notification} = useNotificationStore();
         return {
-            notification,
-            text,
-            show,
-            success
+            notification
         };
     },
     data() {
@@ -94,19 +91,19 @@ export default {
                     this.fetching = false;
                 });
         },
-        async writeDataToClipboard(text){
-            await navigator.clipboard.writeText(text);
-        },
         async newWallet() {
             this.fetching = true;
             await fetch("/api/new_wallet", {
-                method: "POST"
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
             })
                 .then(response => response.json())
                 .then(data => {
                     console.log(data);
                     if (data.error !== null) {
-                        // console.log(data.error);
+                        console.log(data.error);
                         this.notification.notify(data.error, false);
                         return;
                     }
@@ -124,7 +121,10 @@ export default {
         showWalletInfo(currentWalletInfo) {
             this.currentWalletInfo = currentWalletInfo;
             this.showDialog = !this.showDialog;
-        }
+        },
+        async writeDataToClipboard(text){
+            await navigator.clipboard.writeText(text);
+        },
 
     },
     mounted() {
@@ -140,9 +140,6 @@ export default {
     justify-content: flex-start;
     align-items: center;
     margin-top: $offsetVal + px;
-  }
-  .wallets_action {
-    margin-bottom: $offsetVal + px;
   }
   .walletsContainer {
     width: 100%;
