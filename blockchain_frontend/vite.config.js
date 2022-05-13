@@ -40,5 +40,8 @@ export default defineConfig({
                 rewrite: (path) => path.replace(/^\/api/, ""),
             }
         }
+    },
+    build: {
+        outDir: "../blockchain_backend/app/dist"
     }
 });

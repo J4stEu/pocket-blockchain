@@ -1,5 +1,6 @@
 from .app import app
 from .bc_app import bc
+import os
 from flask import request, render_template, send_from_directory
 import json
 
@@ -15,8 +16,8 @@ import json
 @app.route('/<path:path>')
 def serve(path):
     # for service worker
-    if path != "" and os.path.exists(application.template_folder + '/' + path):
-        return send_from_directory(application.template_folder, path)
+    if path != "" and os.path.exists(app.template_folder + '/' + path):
+        return send_from_directory(app.template_folder, path)
     else:
         return render_template('index.html')
 
