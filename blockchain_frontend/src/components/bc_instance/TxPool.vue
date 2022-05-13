@@ -133,7 +133,7 @@ export default {
                 })
                 .catch(err => {
                     console.log(err);
-                    this.fetching = true;
+                    this.fetching = false;
                 });
         },
         async send() {

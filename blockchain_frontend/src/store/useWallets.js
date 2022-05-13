@@ -3,12 +3,14 @@ import {defineStore} from "pinia";
 export const useWallets = defineStore("wallets", {
     state: () => ({
         wallets: [],
-        addresses: []
+        addresses: [],
+        fetching: false,
     }),
     actions: {
         reset() {
             this.wallets = [];
             this.addresses = [];
+            this.fetching = false;
         },
         async getWallets() {
             this.fetching = true;

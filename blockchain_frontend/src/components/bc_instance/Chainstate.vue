@@ -54,11 +54,13 @@ export default {
                             outputs: outputs,
                         });
                     }
+                })
+                .finally(() => {
                     this.fetching = false;
                 })
                 .catch(err => {
                     console.log(err);
-                    this.fetching = true;
+                    this.fetching = false;
                 });
         }
     },

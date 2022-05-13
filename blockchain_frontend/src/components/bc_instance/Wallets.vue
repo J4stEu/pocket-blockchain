@@ -32,10 +32,10 @@
           @showDialog="showWalletInfo"
       />
     </div>
-    <div v-else-if="wallets.length === 0 && !fetching">
+    <div v-else-if="wallets.length === 0 && !walletsFetching">
       There are no wallets...
     </div>
-    <div v-if="fetching">
+    <div v-if="walletsFetching">
       Fetching...
     </div>
   </section>
@@ -58,7 +58,7 @@ export default {
     },
     setup() {
         const { notification } = useNotificationStore();
-        const { walletsStore, wallets } = useWalletsStore();
+        const { walletsStore, wallets, walletsFetching } = useWalletsStore();
         const currentWalletInfo = ref("");
         const fetching = ref(false);
         const showDialog = ref(false);
@@ -66,6 +66,7 @@ export default {
             notification,
             walletsStore,
             wallets,
+            walletsFetching,
             currentWalletInfo,
             fetching,
             showDialog
@@ -100,6 +101,7 @@ export default {
                 .catch(err => {
                     console.log(err);
                     this.notification.notify("Create new wallet: failed", false);
+                    this.fetching = false;
                 });
         },
         showWalletInfo(currentWalletInfo) {

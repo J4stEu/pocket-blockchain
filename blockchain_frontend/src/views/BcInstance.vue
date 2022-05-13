@@ -73,7 +73,6 @@ export default {
     },
     mounted() {
         this.$router.isReady().then(() => {
-            console.log(this.currentRouteName());
             this.navItems.forEach(item => {
                 if (this.currentRouteName().includes(item.path)) {
                     this.selectedItem = item;

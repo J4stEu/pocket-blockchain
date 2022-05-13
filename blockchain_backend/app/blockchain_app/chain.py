@@ -469,7 +469,7 @@ class Chain(object):
         except BcSystemError as error:
             return error
 
-    def get_all_pool(self):
+    def get_all_from_pool(self):
         return models.TXPool.query.all()
 
     def send(self, fr, to, amount):
@@ -536,7 +536,7 @@ class Chain(object):
         except BcSystemError as error:
             return error
 
-    def is_serialized_soinbase_tx(self, jsonTx):
+    def is_serialized_coinbase_tx(self, jsonTx):
         return len(jsonTx["inputs"]) == 1 and json.loads(jsonTx["inputs"][0])["id"] == 0 and \
                json.loads(jsonTx["inputs"][0])[
                    "output"] == -1
@@ -581,11 +581,11 @@ class Chain(object):
                 TransactionInput(
                     json_input["id"],
                     json_input["output"],
-                    {'r': sig[0], 's': sig[1]} if not self.is_serialized_soinbase_tx(json_tx) else sig,
+                    {'r': sig[0], 's': sig[1]} if not self.is_serialized_coinbase_tx(json_tx) else sig,
                     PEMEncoder.decode_public_key(json_input["publicKey"],
-                                                 curve=curve.P256) if not self.is_serialized_soinbase_tx(json_tx) else
+                                                 curve=curve.P256) if not self.is_serialized_coinbase_tx(json_tx) else
                     json_input["publicKey"],
-                    json_input["publicKeyBytes"].encode("latin1") if not self.is_serialized_soinbase_tx(json_tx) else
+                    json_input["publicKeyBytes"].encode("latin1") if not self.is_serialized_coinbase_tx(json_tx) else
                     json_input["publicKeyBytes"]
                 )
             )

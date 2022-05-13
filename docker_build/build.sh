@@ -1,0 +1,1 @@
+docker-compose --project-name pocket_blockchain up -d --build --force-recreate

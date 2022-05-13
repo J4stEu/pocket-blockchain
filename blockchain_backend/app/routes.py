@@ -19,7 +19,7 @@ def serve(path):
     if path != "" and os.path.exists(app.template_folder + '/' + path):
         return send_from_directory(app.template_folder, path)
     else:
-        return render_template('index.html')
+        return render_template("index.html")
 
 
 @app.route('/api/get_wallets', methods=["GET"])
@@ -92,7 +92,7 @@ def get_chainstate():
 @app.route('/api/get_pool', methods=["GET"])
 def get_pool():
     if request.method == 'GET':
-        txs_pool = bc.get_all_pool()
+        txs_pool = bc.get_all_from_pool()
         pool = []
         for tx in txs_pool:
             pool.append({

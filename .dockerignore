@@ -1,0 +1,5 @@
+blockchain_frontend/node_modules/
+blockchain_backend/app/dist
+blockchain_backend/app/migrations
+.idea
+.vscode

@@ -41,7 +41,7 @@
           @showDialog="showBlockTransactions"
       />
     </div>
-    <div v-else-if="!this.fetching && this.blocks.length === 0">
+    <div v-else-if="this.blocks.length === 0 && !this.fetching">
       There are no blocks...
     </div>
     <div v-if="this.fetching">
@@ -105,11 +105,13 @@ export default {
                             }
                         );
                     });
+                })
+                .finally(() => {
                     this.fetching = false;
                 })
                 .catch(err => {
                     console.log(err);
-                    this.fetching = true;
+                    this.fetching = false;
                 });
         },
         async mineBlock() {

@@ -1,0 +1,41 @@
+version: "3.7"
+services:
+  nginx:
+    container_name: "nginx"
+    build: nginx
+    restart: always
+    ports:
+      - "80:80"
+    networks:
+      - pocket_blockchain_network
+
+  app:
+    container_name: "app"
+    build:
+      context: ../
+      dockerfile: ./docker_build/pocket_blockchain/Dockerfile
+    restart: always
+    ports:
+      - "5001:5001"
+    networks:
+      - pocket_blockchain_network
+    environment:
+      DOCKER_DEPLOY: 1
+    depends_on:
+      - db
+
+  db:
+    container_name: "db"
+    image: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    networks:
+      - pocket_blockchain_network
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: blockchain
+      POSTGRES_PASSWORD: postgres
+
+networks:
+  pocket_blockchain_network:
