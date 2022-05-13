@@ -1,0 +1,6 @@
+{
+  "Intro": {
+    "text": "Creation of blockchain system on Python for further integration in different projects",
+    "stack": "Python Flask, Postgres, Vue.js 3"
+  }
+}

@@ -4,7 +4,7 @@ export const useNotification = defineStore("notification", {
     state: () => ({
         text: "",
         show: false,
-        success: true
+        success: true,
     }),
     actions: {
         reset() {

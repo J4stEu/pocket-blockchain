@@ -1,7 +1,9 @@
 <template>
   <section id="main" class="container is-max-desktop">
     <Intro/>
-    <Preview/>
+    <transition appear name="preview">
+      <Preview/>
+    </transition>
   </section>
 </template>
 
@@ -17,6 +19,15 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+  .preview-enter-from {
+    transform: translateY(#{$offsetVal + px});
+  }
+  .preview-enter-to {
+    transform: translateY(0);
+  }
+  .preview-enter-active {
+    transition: transform 0.5s ease-in-out;
+  }
   #main {
     display: flex;
     flex-direction: column;
@@ -25,7 +36,7 @@ export default {
 
     @media screen and (min-height: 0px) and (max-height: 799px) {
       justify-content: flex-start;
+      padding-bottom: $offsetVal * 2 + px;
     }
-
   }
 </style>

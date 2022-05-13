@@ -1,11 +1,25 @@
 <template>
   <section id="txPool">
     <Dialog :show="showDialog" @show="showDialog = !showDialog">
-      <div class="sendForm">
+      <div class="interactForm">
         <span>From: </span>
-        <input type="text" name="from" placeholder="from" v-model="from">
+<!--        <input type="text" name="from" placeholder="from" v-model="from">-->
+        <select v-model="from">
+          <option v-for="address in addresses"
+                  key="address"
+                  :value="address">
+            {{address}}
+          </option>
+        </select>
         <span>To: </span>
-        <input type="text" name="to" placeholder="to" v-model="to">
+<!--        <input type="text" name="to" placeholder="to" v-model="to">-->
+        <select v-model="to">
+          <option v-for="address in addresses"
+                  key="address"
+                  :value="address">
+            {{address}}
+          </option>
+        </select>
         <span>Amount: </span>
         <input type="number" min="1" name="amount" placeholder="amount" v-model="amount">
         <div @click="send">
@@ -15,11 +29,11 @@
         </div>
       </div>
     </Dialog>
-    <p class="bcInstanceHeader">
+    <h1 class="infoHeader">
       Transactions pool - pool of transactions that are awaiting confirmation (storing in new block).
-    </p>
+    </h1>
     <div class="bcInstanceAction" @click="showDialog = !showDialog">
-      <ITSButton text="Send (to, from, amount)"
+      <ITSButton text="Send"
                  :buttonColor="'rgba(76, 212, 176, 0.2)'">
       </ITSButton>
     </div>
@@ -53,8 +67,8 @@
       <el-table-column label="To address" prop="toAddr"/>
       <el-table-column label="Amount" prop="amount" width="150px"/>
     </el-table>
-    <div v-else-if="tableData.length === 0 && !fetching">
-      There is no chainstate
+    <div v-else-if="!fetching && tableData.length === 0">
+      There is no transaction pool
     </div>
     <div v-if="fetching">
       Fetching...
@@ -66,6 +80,8 @@
 import {useNotificationStore} from "@/hooks/useNotificationStore";
 import Dialog from "@/components/ui/Dialog.vue";
 import ITSButton from "@/components/ui/ITSButton.vue";
+import {useWalletsStore} from "@/hooks/useWalletsStore";
+import {ref} from "vue";
 export default {
     components: {
         Dialog,
@@ -73,18 +89,23 @@ export default {
     },
     setup() {
         const {notification} = useNotificationStore();
+        const { walletsStore, addresses } = useWalletsStore();
+        const tableData = ref([]);
+        const fetching = ref(false);
+        const showDialog =  ref(false);
+        const from = ref("");
+        const to = ref("");
+        const amount = ref(1);
         return {
-            notification
-        };
-    },
-    data() {
-        return {
-            tableData: [],
-            fetching: false,
-            showDialog: false,
-            from: "",
-            to: "",
-            amount: 1
+            notification,
+            walletsStore,
+            addresses,
+            tableData,
+            fetching,
+            showDialog,
+            from,
+            to,
+            amount
         };
     },
     methods: {
@@ -96,6 +117,7 @@ export default {
                 .then(response => response.json())
                 .then(data => {
                     // console.log(data);
+                    this.tableData = [];
                     data.forEach((value) => {
                         // console.log(value);
                         this.tableData.push(
@@ -115,6 +137,13 @@ export default {
                 });
         },
         async send() {
+            if (this.fetching) {
+                return;
+            }
+            if (!this.validateTxPoolInteractForm()) {
+                this.notification.notify("Invalid request parameters...", false);
+                return;
+            }
             this.fetching = true;
             await fetch("/api/send", {
                 method: "POST",
@@ -129,13 +158,13 @@ export default {
             })
                 .then(response => response.json())
                 .then(data => {
-                    console.log(data);
+                    // console.log(data);
                     if (data.error !== null) {
                         console.log(data.error);
                         this.notification.notify(data.error, false);
                         return;
                     }
-                    this.notification.notify("Success", true);
+                    this.notification.notify("Send: success", true);
                 })
                 .finally(() => {
                     this.fetching = false;
@@ -147,13 +176,28 @@ export default {
                 })
                 .catch(err => {
                     console.log(err);
-                    this.notification.notify("Error", false);
+                    this.notification.notify("Send: failed", false);
                     this.fetching = true;
                 });
+        },
+        validateTxPoolInteractForm() {
+            if (typeof this.to !== "string") {
+                return false;
+            }
+            if (typeof this.from !== "string") {
+                return false;
+            }
+            if (typeof this.amount !== "number") {
+                return false;
+            }
+            return !(this.to === "" || this.from === "" || this.txAmount < 1);
         }
     },
     mounted() {
         this.getTxPool();
+        if (this.addresses.length === 0 ) {
+            this.walletsStore.getWallets();
+        }
     }
 };
 </script>
@@ -177,9 +221,7 @@ export default {
   }
   p {
     display: flex;
-    //margin-top: 15px;
     text-indent: 1em;
-    //text-align: justify;
 
     @media screen and (min-width:0px) and (max-width:949px) {
       display: block;
@@ -203,23 +245,6 @@ export default {
       &:last-child {
         width: 100%;
       }
-    }
-  }
-  .sendForm {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: $offsetVal+ px;
-
-    input {
-      margin: $offsetVal + px;
-      width: 300px;
-      min-width: calc(300px - #{$offsetVal * 4 + px});
-      height: 25px;
-      border: 1px solid black;
-      border-radius: calc($offsetVal / 4) + px;
-      padding-left: calc($offsetVal / 4) + px;
     }
   }
 </style>

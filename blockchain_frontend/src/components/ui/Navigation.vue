@@ -49,6 +49,7 @@ export default {
       padding: 0;
       border-bottom: 2px solid rgba(0, 0, 0, 0);
       white-space: nowrap;
+      transition: border 0.2s ease-in-out;
 
       &:hover {
         border-bottom: 2px solid $lightGreen;

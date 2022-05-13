@@ -19,10 +19,10 @@
       </ITSButton>
     </div>
     <p>
-      Creation of blockchain system on Python for further integration in different projects
+      {{intro.Intro.text}}
     </p>
     <p>
-      Python, Flask, Postgres, Vue.js
+      {{intro.Intro.stack}}
     </p>
   </section>
 </template>
@@ -31,12 +31,18 @@
 import GitHubIcon from "@/assets/icons/iconmonstr-github-1.svg?component";
 import ShareIcon from "@/assets/icons/iconmonstr-share-8.svg?component";
 import ITSButton from "@/components/ui/ITSButton.vue";
+import Intro from "@/data/intro.json";
 export default {
     components: {
         ITSButton,
         GitHubIcon,
         ShareIcon
     },
+    data() {
+        return {
+            intro: Intro
+        };
+    }
 };
 </script>
 
@@ -67,5 +73,9 @@ export default {
   p {
     text-align: center;
     margin-top: $offsetVal + px;
+
+    &:last-child {
+      font-family: "Open Sans light", serif !important;
+    }
   }
 </style>

@@ -6,17 +6,16 @@
         is-max-desktop
     "
   >
-<!--    <h1>{{ title }}</h1>-->
-    <p class="bcInstanceHeader">
-      System Info
-    </p>
+    <transition appear name="info-header">
+      <h1 class="infoHeader"> {{ title }} </h1>
+    </transition>
     <div>
       <p
           v-for="(option, optionName) in options"
           :key="optionName"
       >
-        <strong>{{ option.option }}:</strong>
-        <span>{{ option.parameter }}.</span>
+        <span>{{ option.option }}:</span>
+        <span>{{ option.parameter }}</span>
       </p>
     </div>
   </div>
@@ -43,21 +42,23 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+  .info-header-enter-from {
+    transform: translateY(-#{$offsetVal + px});
+  }
+  .info-header-enter-to {
+    transform: translateY(0);
+  }
+  .info-header-enter-active {
+    transition: transform 0.4s ease-in-out;
+  }
   #bio {
     margin: 0;
-    margin-top: $offsetVal + px;
+    margin-top: $offsetVal * 2 + px;
     //padding: 0px $offsetVal + px;
     color: black;
     display: flex;
     justify-content: flex-start;
     align-items: center;
-  }
-  h1 {
-    color: black;
-    font-weight: bold;
-    border-bottom: 2px solid $lightGreen;
-    display: inline;
-    width: min-content;
   }
   div {
     display: flex;
@@ -66,28 +67,23 @@ export default {
     p {
       display: flex;
       margin-top: calc($offsetVal / 2) + px;
-      //text-indent: 1em;
       text-align: justify;
 
-      strong {
-        //font-family: "Open Sans bold", serif;
-        color: $brown;
-        text-decoration: underline;
-        min-width: $offsetVal * 8 + px;
-        padding-right: calc($offsetVal / 2) + px;
-        white-space: nowrap;
+      span {
+        text-indent: initial;
 
-        @media screen and (min-width: 0px) and (max-width: 420px) {
-          min-width: $offsetVal * 5 + px;
+        &:first-child {
+          color: $brown;
+          text-decoration: underline;
+          min-width: $offsetVal * 6 + px;
+          padding-right: calc($offsetVal / 2) + px;
+          white-space: nowrap;
         }
-        @media screen and (min-width: 0px) and (max-width: 330px) {
-          min-width: $offsetVal * 2 + px;
+
+        &:last-child {
+          word-break: break-word;
         }
       }
-
-    }
-    span {
-      text-indent: initial;
     }
   }
 </style>

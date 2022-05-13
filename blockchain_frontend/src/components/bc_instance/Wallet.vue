@@ -1,11 +1,12 @@
 <template>
-  <div class="wallet">
-    <p><span>Address:</span> <span>{{address}}</span></p>
-<!--    <p><span>{{address}}</span></p>-->
-    <p><span>Private key:</span> <span><EyeIcon @click="$emit('showDialog', BigInt(privateKey))"/></span></p>
-    <p><span>Public key:</span> <span><EyeIcon @click="$emit('showDialog', publicKey)"/></span></p>
-    <p><span>Balance:</span> <span>{{balance}}</span></p>
-  </div>
+  <transition appear>
+    <div class="wallet">
+      <p><span>Address:</span> <span>{{address}}</span></p>
+      <p><span>Private key:</span> <span><EyeIcon @click="$emit('showDialog', BigInt(privateKey))"/></span></p>
+      <p><span>Public key:</span> <span><EyeIcon @click="$emit('showDialog', publicKey)"/></span></p>
+      <p><span>Balance:</span> <span>{{balance}}</span></p>
+    </div>
+  </transition>
 </template>
 
 <script>
@@ -52,6 +53,7 @@ export default {
 
     svg {
       cursor: pointer;
+      transition: opacity 0.2s ease-in-out;
 
       &:hover {
         opacity: 0.5;
@@ -69,10 +71,6 @@ export default {
 
       &:first-child {
         margin-top: 0;
-
-        span {
-          //color: $lightGreen;
-        }
       }
 
       span {

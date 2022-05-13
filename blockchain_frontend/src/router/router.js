@@ -1,6 +1,7 @@
 import Main from "@/views/Main.vue";
 import InfoAndActions from "@/views/BcInstance.vue";
-import Info from "@/views/Info.vue";
+import SystemInfo from "@/views/SystemInfo.vue";
+import NotFound from "@/views/NotFound.vue";
 import {createRouter, createWebHistory} from "vue-router";
 const routes = [
     {
@@ -8,8 +9,8 @@ const routes = [
         component: Main
     },
     {
-        path: "/info",
-        component: Info
+        path: "/system-info",
+        component: SystemInfo
     },
     {
         path: "/bc-instance",
@@ -19,6 +20,9 @@ const routes = [
         path: "/bc-instance/:name",
         component: InfoAndActions,
     },
+    {   path: "/:pathMatch(.*)*",
+        component: NotFound
+    }
 ];
 
 const router = createRouter({

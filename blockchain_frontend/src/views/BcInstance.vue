@@ -1,26 +1,41 @@
 <template>
   <section id="bcInstance" class="container is-max-desktop">
     <div>
-      <Navigation
-          :navItems="navItems"
-          :selectedItem="selectedItem"
-          @setCurrentItem="setCurrentItem"
-      >
-        <SquareIcon/>
-      </Navigation>
+      <transition appear name="bc-instance-menu">
+        <Navigation
+            :navItems="navItems"
+            :selectedItem="selectedItem"
+            @setCurrentItem="setCurrentItem"
+        >
+          <SquareIcon/>
+        </Navigation>
+      </transition>
     </div>
-    <div class="blockchainContent" v-if="currentRouteName() === '/bc-instance/wallets'">
-      <Wallets/>
-    </div>
-    <div class="blockchainContent" v-if="currentRouteName() === '/bc-instance/blocks'">
-      <Blocks/>
-    </div>
-    <div class="blockchainContent" v-if="currentRouteName() === '/bc-instance/chainstate'">
-      <Chainstate/>
-    </div>
-    <div class="blockchainContent" v-if="currentRouteName() === '/bc-instance/tx_pool'">
-      <TxPool/>
-    </div>
+    <transition>
+      <div class="bcInstanceContent" v-if="currentRouteName() === '/bc-instance/wallets'">
+        <Wallets/>
+      </div>
+    </transition>
+    <transition>
+      <div class="bcInstanceContent" v-if="currentRouteName() === '/bc-instance/blocks'">
+         <Blocks/>
+      </div>
+    </transition>
+    <transition>
+      <div class="bcInstanceContent" v-if="currentRouteName() === '/bc-instance/chainstate'">
+        <Chainstate/>
+      </div>
+    </transition>
+    <transition>
+      <div class="bcInstanceContent" v-if="currentRouteName() === '/bc-instance/tx_pool'">
+        <TxPool/>
+      </div>
+    </transition>
+    <transition>
+      <div class="bcInstanceContent" v-if="!paths.includes(currentRouteName())">
+        <NoSuchBcInstance/>
+      </div>
+    </transition>
   </section>
 </template>
 
@@ -31,7 +46,9 @@ import Wallets from "@/components/bc_instance/Wallets.vue";
 import Blocks from "@/components/bc_instance/Blocks.vue";
 import Chainstate from "@/components/bc_instance/Chainstate.vue";
 import TxPool from "@/components/bc_instance/TxPool.vue";
+import NoSuchBcInstance from "@/components/bc_instance/NoSuchBcInstance.vue";
 import {useNavigation} from "@/hooks/useNavigation";
+import {ref} from "vue";
 export default {
     components: {
         Navigation,
@@ -39,7 +56,8 @@ export default {
         Wallets,
         Blocks,
         Chainstate,
-        TxPool
+        TxPool,
+        NoSuchBcInstance
     },
     setup() {
         const {navItems, selectedItem, currentRouteName, setCurrentItem} = useNavigation([
@@ -48,12 +66,14 @@ export default {
             {id: 3, name: "Chainstate", path: "/bc-instance/chainstate"},
             {id: 4, name: "TX pool", path: "/bc-instance/tx_pool"}
         ],);
+        const paths = ref(["/bc-instance/wallets", "/bc-instance/blocks", "/bc-instance/chainstate", "/bc-instance/tx_pool"]);
         return {
-            navItems, selectedItem, currentRouteName, setCurrentItem
+            navItems, selectedItem, currentRouteName, setCurrentItem, paths
         };
     },
     mounted() {
         this.$router.isReady().then(() => {
+            console.log(this.currentRouteName());
             this.navItems.forEach(item => {
                 if (this.currentRouteName().includes(item.path)) {
                     this.selectedItem = item;
@@ -65,6 +85,15 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+  .bc-instance-menu-enter-from {
+    transform: translateX(-#{$offsetVal + px});
+  }
+  .bc-instance-menu-enter-to {
+    transform: translateX(0);
+  }
+  .bc-instance-menu-enter-active {
+    transition: transform 0.5s ease-in-out;
+  }
   #bcInstance {
     display: flex;
     flex-direction: column;
@@ -82,7 +111,7 @@ export default {
       }
     }
   }
-  .blockchainContent {
+  .bcInstanceContent {
     padding-bottom: $offsetVal + px;
   }
 </style>

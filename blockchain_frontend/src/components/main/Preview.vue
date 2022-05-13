@@ -6,19 +6,23 @@
       </div>
       <div class="bottomPreviewContainer">
         <div>
-          <div class="nameContainer">
-            <ITSButton
-                text="Eugene Nikonov"
-                src="https://j4steu.github.io/"
-                :isSrc="true"
-                :buttonColor="'rgba(76, 212, 176, 0.2)'"
-            >
-              <template v-slot:afterIcon>
-                <ShareIcon/>
-              </template>
-            </ITSButton>
-          </div>
-          <p>Digital Artificer (Developer / Designer)</p>
+          <transition appear name="me-button">
+            <div class="nameContainer">
+              <ITSButton
+                  text="Eugene Nikonov"
+                  src="https://j4steu.github.io/"
+                  :isSrc="true"
+                  :buttonColor="'rgba(76, 212, 176, 0.2)'"
+              >
+                <template v-slot:afterIcon>
+                  <ShareIcon/>
+                </template>
+              </ITSButton>
+            </div>
+          </transition>
+          <transition appear name="me-intro">
+            <p>Digital Artificer (Developer / Designer)</p>
+          </transition>
         </div>
       </div>
     </div>
@@ -28,7 +32,6 @@
 <script>
 import ITSButton from "@/components/ui/ITSButton.vue";
 import ShareIcon from "@/assets/icons/iconmonstr-share-8.svg?component";
-
 export default {
     components: {
         ITSButton,
@@ -38,6 +41,18 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+  .me-button-enter-from, .me-intro-enter-from {
+    transform: translateY(#{$offsetVal + px});
+  }
+  .me-button-enter-to, .me-intro-enter-to {
+    transform: translateY(0);
+  }
+  .me-button-enter-active {
+    transition: transform 0.2s ease-in-out;
+  }
+  .me-intro-enter-active {
+    transition: transform 0.4s ease-in-out;
+  }
   #preview {
     padding: 0 $offsetVal + px;
     margin-top: $offsetVal + px;
@@ -93,9 +108,8 @@ export default {
     height: $offsetVal * 8 + px;
     border: 2px solid $lightGreen;
     border-radius: 50%;
-    background: url("@/assets/img/j4steu.jpeg");
+    background: url("@/assets/img/j4steu.jpeg") center;
     background-size: cover;
-    background-position: center;
 
     @media screen and (min-width:0px) and (max-width:768px) {
       margin-top: $offsetVal + px;

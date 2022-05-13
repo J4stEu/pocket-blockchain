@@ -18,11 +18,11 @@ export default {
             type: Boolean,
             default: false,
         },
-        text: {
+        src: {
             type: String,
             default: ""
         },
-        src: {
+        text: {
             type: String,
             default: ""
         },
@@ -43,6 +43,11 @@ export default {
     color: black;
     padding: calc($offsetVal / 4) + px;
     cursor: pointer;
+    transition: opacity 0.2s linear;
+
+    &:hover {
+      opacity: 0.8;
+    }
   }
   p {
     padding: 0 calc($offsetVal / 4) + px 0 calc($offsetVal / 4) + px;

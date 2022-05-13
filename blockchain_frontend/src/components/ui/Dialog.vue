@@ -1,9 +1,11 @@
 <template>
-  <div id="dialog" v-if="show" @click.stop="showDialog">
-    <div @click.stop class="dialogContent container is-max-desktop">
-      <slot></slot>
+  <transition name="dialog">
+    <div id="dialog" v-if="show" @click.stop="showDialog">
+      <div @click.stop class="dialogContent container is-max-desktop">
+        <slot></slot>
+      </div>
     </div>
-  </div>
+  </transition>
 </template>
 
 <script>
@@ -23,6 +25,15 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+  .dialog-enter-from, .dialog-leave-to  {
+    opacity: 0;
+  }
+  .dialog-enter-to, .dialog-leave-from  {
+    opacity: 1;
+  }
+  .dialog-enter-active, .dialog-leave-active {
+    transition: all 0.2s ease-in-out;
+  }
   #dialog {
     top: 0;
     bottom: 0;

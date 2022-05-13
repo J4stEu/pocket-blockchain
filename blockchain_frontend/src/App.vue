@@ -2,7 +2,11 @@
   <div id="app">
     <Header/>
     <Notification/>
-    <router-view></router-view>
+    <router-view v-slot="{ Component }">
+      <transition name="router">
+        <component :is="Component" />
+      </transition>
+    </router-view>
   </div>
 </template>
 
@@ -18,6 +22,15 @@ export default {
 </script>
 
 <style lang="scss">
+  .router-enter-from {
+    opacity: 0;
+  }
+  .router-enter-to {
+    opacity: 1;
+  }
+  .router-enter-active {
+    transition: all 0.5s ease-in-out;
+  }
   #app {
     width: 100vw;
     height: 100vh;

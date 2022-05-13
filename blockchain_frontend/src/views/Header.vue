@@ -12,8 +12,8 @@
 
 <script>
 import Navigation from "@/components/ui/Navigation.vue";
-import ArrowRightIcon from "@/assets/icons/iconmonstr-arrow-right-lined.svg?component";
 import {useNavigation} from "@/hooks/useNavigation";
+import ArrowRightIcon from "@/assets/icons/iconmonstr-arrow-right-lined.svg?component";
 export default {
     components: {
         Navigation,
@@ -22,7 +22,7 @@ export default {
     setup() {
         const {navItems, selectedItem, currentRouteName, setCurrentItem} = useNavigation([
             {id: 1, name: "Home", path: "/"},
-            {id: 2, name: "Info", path: "/info"},
+            {id: 2, name: "System info", path: "/system-info"},
             {id: 3, name: "BC Instance", path: "/bc-instance/wallets"},
         ]);
         return {
@@ -31,11 +31,10 @@ export default {
     },
     mounted() {
         this.$router.isReady().then(() => {
-            // console.log(this.currentRouteName());
             if (this.currentRouteName() === "/") {
                 this.selectedItem = this.navItems[0];
             }
-            if (this.currentRouteName() === "/info") {
+            if (this.currentRouteName() === "/system-info") {
                 this.selectedItem = this.navItems[1];
             }
             if (this.currentRouteName() === "/bc-instance/wallets" || this.currentRouteName().includes("/bc-instance")) {

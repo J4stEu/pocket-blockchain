@@ -1,17 +1,27 @@
 from .app import app
 from .bc_app import bc
-from flask import request
+from flask import request, render_template, send_from_directory
 import json
 
-@app.route('/')
-def index():
-    if bc.is_system_initialized():
-        return "<p>Blockchain instance is already initialized.</p>"
+
+# @app.route('/')
+# def index():
+#     if bc.is_system_initialized():
+#         return "<p>Blockchain instance is already initialized.</p>"
+#     else:
+#         return "<p>Blockchain is not initialized yet.</p>"
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    # for service worker
+    if path != "" and os.path.exists(application.template_folder + '/' + path):
+        return send_from_directory(application.template_folder, path)
     else:
-        return "<p>Blockchain is not initialized yet.</p>"
+        return render_template('index.html')
 
 
-@app.route('/get_wallets', methods=["GET"])
+@app.route('/api/get_wallets', methods=["GET"])
 def get_wallets():
     if request.method == 'GET':
         wallets_info = []
@@ -39,7 +49,7 @@ def get_wallets():
         }
 
 
-@app.route('/new_wallet', methods=["POST"])
+@app.route('/api/new_wallet', methods=["POST"])
 def new_wallet():
     if request.method == 'POST':
         data = bc.new_wallet()
@@ -54,7 +64,7 @@ def new_wallet():
         }
 
 
-@app.route('/get_blocks', methods=["GET"])
+@app.route('/api/get_blocks', methods=["GET"])
 def get_blocks():
     if request.method == 'GET':
         blocks = []
@@ -67,7 +77,7 @@ def get_blocks():
         return json.dumps(blocks)
 
 
-@app.route('/get_chainstate', methods=["GET"])
+@app.route('/api/get_chainstate', methods=["GET"])
 def get_chainstate():
     if request.method == 'GET':
         utxo = {}
@@ -78,7 +88,7 @@ def get_chainstate():
         return utxo
 
 
-@app.route('/get_pool', methods=["GET"])
+@app.route('/api/get_pool', methods=["GET"])
 def get_pool():
     if request.method == 'GET':
         txs_pool = bc.get_all_pool()
@@ -96,7 +106,7 @@ def get_pool():
         return json.dumps(pool)
 
 
-@app.route('/send', methods=["POST"])
+@app.route('/api/send', methods=["POST"])
 def send():
     if request.method == 'POST':
         if not request.is_json:
@@ -110,6 +120,11 @@ def send():
                 return {
                     "data": None,
                     "error": "Request: invalid amount value"
+                }
+            if data["from"] == "" or data["to"] == "" or data["from"] == data["to"]:
+                return {
+                    "data": None,
+                    "error": "Request: invalid request parameters"
                 }
             data = bc.send(data["from"], data["to"], data["amount"])
             if isinstance(data, Exception):
@@ -126,7 +141,8 @@ def send():
             "error": "Request: invalid parameters"
         }
 
-@app.route('/mine_block', methods=["POST"])
+
+@app.route('/api/mine_block', methods=["POST"])
 def mine_block():
     if request.method == 'POST':
         if not request.is_json:
@@ -139,7 +155,12 @@ def mine_block():
             if data["txAmount"] < 1:
                 return {
                     "data": None,
-                    "error": "Request: invalid amotxAmountunt value"
+                    "error": "Request: invalid txAmount value"
+                }
+            if data["address"] == "":
+                return {
+                    "data": None,
+                    "error": "Request: invalid address value"
                 }
             data = bc.mine_block(data["address"], data["txAmount"])
             if isinstance(data, Exception):
@@ -157,7 +178,8 @@ def mine_block():
                 "error": "Request: invalid parameters"
             }
 
-@app.route('/reset_system', methods=["POST"])
+
+@app.route('/api/reset_system', methods=["POST"])
 def reset_system():
     if request.method == 'POST':
         data = bc.clean_system()

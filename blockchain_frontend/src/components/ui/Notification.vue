@@ -1,7 +1,9 @@
 <template>
-  <div id="notification" :class="{successColor: success, errorColor: !success }" v-if="show" @click="notification.reset">
-    <span>{{text}}</span>
-  </div>
+  <transition name="notification">
+    <div id="notification" :class="{successColor: success, errorColor: !success}" v-if="show" @click="notification.reset">
+      <span>{{cutText(text)}}</span>
+    </div>
+  </transition>
 </template>
 
 <script>
@@ -15,11 +17,25 @@ export default {
             show,
             success
         };
+    },
+    methods: {
+        cutText(text) {
+            return text.length > 30 ? text.slice(0, 30) + "..." : text;
+        }
     }
 };
 </script>
 
 <style lang="scss" scoped>
+  .notification-enter-from, .notification-leave-to {
+    transform: translateX(30px);
+  }
+  .notification-enter-to, .notification-leave-from {
+    transform: translateX(0);
+  }
+  .notification-enter-active, .notification-leave-active {
+    transition: all 0.5s ease-in-out;
+  }
   #notification {
     position: fixed;
     z-index: 3;
@@ -31,9 +47,17 @@ export default {
     justify-content: flex-start;
     align-items: center;
     border-radius: calc($offsetVal / 4) + px;
+    transition: opacity 0.2s linear;
+    cursor: pointer;
+    box-shadow: $shadow;
+
+    &:hover {
+      opacity: 0.8;
+    }
 
     span {
       margin-left: $offsetVal + px;
+      white-space: nowrap;
     }
   }
   .successColor {
@@ -41,5 +65,8 @@ export default {
   }
   .errorColor {
     background: $red;
+  }
+  .warningColor {
+    background: $yellow;
   }
 </style>

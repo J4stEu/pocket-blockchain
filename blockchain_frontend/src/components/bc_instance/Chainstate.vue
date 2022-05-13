@@ -1,12 +1,9 @@
 <template>
   <section id="chainstate">
-    <p class="bcInstanceHeader">
+    <h1 class="infoHeader">
       Chainstate - pool that shows only unspent transactions / outputs.
-    </p>
-    <div v-if="fetching">
-      Fetching...
-    </div>
-    <el-table v-else-if="!fetching && tableData.length !== 0"
+    </h1>
+    <el-table v-if="tableData.length > 0"
               :data="tableData"
               class="table"
     >
@@ -22,8 +19,11 @@
       <el-table-column label="Transaction ID" prop="txID"/>
       <el-table-column label="Outputs" prop="outputsCount" width="150px" />
     </el-table>
-    <div v-else-if="tableData.length === 0">
+    <div v-else-if="!fetching && tableData.length === 0">
       There is no chainstate
+    </div>
+    <div v-if="fetching">
+      Fetching...
     </div>
   </section>
 </template>

@@ -473,7 +473,10 @@ class Chain(object):
         return models.TXPool.query.all()
 
     def send(self, fr, to, amount):
-        # fr_pined_transactions, error = self.get_from_pool(fr)
+        # try:
+        #     if fr == to:
+        #         raise BcSystemError("Transaction", "Invalid addresses.")
+            # fr_pined_transactions, error = self.get_from_pool(fr)
         data = self.get_from_pool(fr)
         if isinstance(data, Exception):
             print("{}: {}".format(data.error_type, data.error_message))
@@ -488,7 +491,8 @@ class Chain(object):
         if isinstance(data, Exception):
             pool_tx = models.TXPool(txID=None, fromAddr=fr,
                                     toAddr=to, amount=amount,
-                                    serializedTransaction=None, error=True, errorText="{}: {}".format(data.error_type, data.error_message))
+                                    serializedTransaction=None, error=True,
+                                    errorText="{}: {}".format(data.error_type, data.error_message))
             self.db.session.add(pool_tx)
             self.db.session.commit()
             print("{}: {}".format(data.error_type, data.error_message))
@@ -504,6 +508,8 @@ class Chain(object):
         self.db.session.commit()
         print("Transaction is added to pool.")
         return True
+        # except BcSystemError as error:
+        #     return error
 
     def get_balance(self, address):
         try:

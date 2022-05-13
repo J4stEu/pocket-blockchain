@@ -14,9 +14,9 @@
         </div>
       </div>
     </Dialog>
-    <p class="bcInstanceHeader">
+    <h1 class="infoHeader">
       Wallet - a pair of private and public keys.
-    </p>
+    </h1>
     <div class="bcInstanceAction" @click="newWallet">
       <ITSButton text="Create new wallet"
                  :buttonColor="'rgba(76, 212, 176, 0.2)'">
@@ -47,6 +47,8 @@ import Dialog from "@/components/ui/Dialog.vue";
 import ITSButton from "@/components/ui/ITSButton.vue";
 import CopyToClipboard from "@/assets/icons/iconmonstr-copy-thin.svg?component";
 import {useNotificationStore} from "@/hooks/useNotificationStore";
+import {useWalletsStore} from "@/hooks/useWalletsStore";
+import {ref} from "vue";
 export default {
     components: {
         Wallet,
@@ -55,43 +57,25 @@ export default {
         CopyToClipboard
     },
     setup() {
-        const {notification} = useNotificationStore();
+        const { notification } = useNotificationStore();
+        const { walletsStore, wallets } = useWalletsStore();
+        const currentWalletInfo = ref("");
+        const fetching = ref(false);
+        const showDialog = ref(false);
         return {
-            notification
-        };
-    },
-    data() {
-        return {
-            wallets: [],
-            currentWalletInfo: "",
-            fetching: false,
-            showDialog: false,
+            notification,
+            walletsStore,
+            wallets,
+            currentWalletInfo,
+            fetching,
+            showDialog
         };
     },
     methods: {
-        async getWallets() {
-            this.fetching = true;
-            await fetch("/api/get_wallets", {
-                method: "GET"
-            })
-                .then(response => response.json())
-                .then(data => {
-                    // console.log(data);
-                    if (data.error !== null) {
-                        console.log(data.err);
-                        return;
-                    }
-                    this.wallets = data.data;
-                })
-                .finally(() => {
-                    this.fetching = false;
-                })
-                .catch(err => {
-                    console.log(err);
-                    this.fetching = false;
-                });
-        },
         async newWallet() {
+            if (this.fetching) {
+                return;
+            }
             this.fetching = true;
             await fetch("/api/new_wallet", {
                 method: "POST",
@@ -101,21 +85,21 @@ export default {
             })
                 .then(response => response.json())
                 .then(data => {
-                    console.log(data);
+                    // console.log(data);
                     if (data.error !== null) {
                         console.log(data.error);
                         this.notification.notify(data.error, false);
                         return;
                     }
-                    this.notification.notify("Success", true);
+                    this.notification.notify("Create new wallet: success", true);
                 })
                 .finally(() => {
                     this.fetching = false;
-                    this.getWallets();
+                    this.walletsStore.getWallets();
                 })
                 .catch(err => {
                     console.log(err);
-                    this.notification.notify("Error", false);
+                    this.notification.notify("Create new wallet: failed", false);
                 });
         },
         showWalletInfo(currentWalletInfo) {
@@ -125,10 +109,11 @@ export default {
         async writeDataToClipboard(text){
             await navigator.clipboard.writeText(text);
         },
-
     },
     mounted() {
-        this.getWallets();
+        if (this.wallets.length === 0) {
+            this.walletsStore.getWallets();
+        }
     }
 };
 </script>

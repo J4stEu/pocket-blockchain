@@ -20,7 +20,7 @@ p, a, div {
     cursor: pointer;
   }
 }
-.bcInstanceHeader {
+.infoHeader {
   padding-bottom: $offsetVal + px;
   white-space: normal !important;
   text-indent: 1em;
@@ -28,6 +28,38 @@ p, a, div {
 }
 .bcInstanceAction {
   margin-bottom: $offsetVal + px;
+}
+.v-enter-from {
+  opacity: 0;
+}
+.v-enter-to {
+  opacity: 1;
+}
+.v-enter-active {
+  transition: all 0.5s ease-in-out;
+}
+.interactForm {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: $offsetVal+ px;
+
+  span {
+    color: $brown;
+    text-decoration: underline;
+  }
+
+  input, select {
+    position: relative;
+    margin: $offsetVal + px;
+    width: 300px;
+    min-width: calc(300px - #{$offsetVal * 4 + px});
+    height: 25px;
+    border: 1px solid black;
+    border-radius: calc($offsetVal / 4) + px;
+    padding-left: calc($offsetVal / 4) + px;
+  }
 }
 // responsiveness styles
 .container {
